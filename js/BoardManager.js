@@ -150,6 +150,35 @@ class BoardManager {
             blockB.x = posB.x;
             blockB.y = posB.y;
         }
+        
+    }
+    
+    /**
+     * 블럭을 빈칸으로 이동
+     * @returns {boolean} 성공 여부
+     */
+    moveToEmpty(fromCol, fromRow, toCol, toRow) {
+        const block = this.grid[fromRow][fromCol];
+
+        if (!block) {
+            console.warn('[BoardManager] 이동할 블럭 없음');
+            return false;
+        }
+        if (this.grid[toRow][toCol] !== null) {
+            console.warn('[BoardManager] 대상 칸이 비어있지 않음');
+            return false;
+        }
+
+        // 원래 칸 비우기
+        this.grid[fromRow][fromCol] = null;
+
+        // 대상 칸에 배치
+        this.grid[toRow][toCol] = block;
+        block.boardCol = toCol;
+        block.boardRow = toRow;
+        this.snapToCell(block);
+
+        return true;
     }
 
     /**

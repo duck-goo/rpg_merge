@@ -28,6 +28,8 @@ class Block extends Phaser.GameObjects.Container {
         this.dragStartY = 0;
         // 블럭 소속: 'board' 또는 'queue'
         this.location = 'board';
+        // 인벤토리 슬롯 인덱스 (location === 'inventory'일 때만 유효)
+        this.inventorySlot = -1;
 
         this._draw();
         scene.add.existing(this);

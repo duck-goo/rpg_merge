@@ -22,6 +22,14 @@ const CONFIG = {
         SLOT_GAP: 8,       // 슬롯 간 간격
     },
 
+    // 인벤토리 설정
+    INVENTORY: {
+        INITIAL_SLOTS: 20,    // 초기 칸수
+        COLS: 5,              // 인벤 창 가로 칸수
+        CELL_SIZE: 52,        // 인벤 창 셀 크기
+        CELL_GAP: 4,
+    },
+
     // UI 레이아웃 (Y 기준, 비율 → 픽셀 변환)
     LAYOUT: {
         // 적군 영역: 0% ~ 15%
@@ -50,6 +58,11 @@ const CONFIG = {
         QUEUE_AREA: 0x1a1a2e,     // 대기칸 영역
         QUEUE_SLOT: 0x233554,     // 대기칸 슬롯
         BUTTON_AREA: 0x1a1a2e,    // 버튼 영역
+        // 인벤토리
+        INV_OVERLAY: 0x000000,     // 반투명 배경 (알파로 투명도 조절)
+        INV_PANEL: 0x16213e,       // 인벤 창 배경
+        INV_SLOT: 0x0f3460,        // 인벤 셀
+        INV_SLOT_EMPTY: 0x233554,  // 빈 인벤 셀
     },
     
     // 블럭 설정
@@ -75,6 +88,76 @@ const CONFIG = {
         HP_HEAL_MULT: 8,        // HP물약 회복 배율
         MP_HEAL_MULT: 5,        // MP물약 임시 회복 배율 (Phase 2에서 스킬게이지로 전환)
     },
+
+    // 리트라이 설정
+    RETRY: {
+        AD_DURATION_MS: 3000,       // 광고 시뮬레이션 시간 (실제 광고로 교체 예정)
+        MAX_AD_PER_STAGE: 1,        // 스테이지당 광고 리트라이 횟수
+    },
+
+    // 튜토리얼 (스테이지별 안내 문구)
+    TUTORIAL: {
+        1: {
+            title: '환영합니다!',
+            body:
+                '같은 종류+등급 블럭 2개를 맞대면\n' +
+                '상위 블럭으로 합쳐집니다.\n\n' +
+                '블럭을 대기칸에 올리고 [발동]을\n' +
+                '누르면 전투가 시작됩니다.',
+        },
+        2: {
+            title: '인벤토리',
+            body:
+                '하단 [인벤] 버튼으로\n' +
+                '블럭을 인벤토리에 보관할 수 있습니다.\n\n' +
+                '보드 블럭을 [인벤] 버튼 위로\n' +
+                '드래그하면 저장됩니다.\n\n' +
+                '※ 패배 시 인벤 블럭은 사라집니다.',
+        },
+        3: {
+            title: '케미 시스템',
+            body:
+                '대기칸에 특정 블럭을 나란히 두면\n' +
+                '케미가 자동 발동됩니다.\n\n' +
+                '예) 영웅+영웅 → 데미지 1.3배\n\n' +
+                '하단 [도감] 버튼에서\n' +
+                '모든 케미 조합을 확인하세요.',
+        },
+    },
+
+    // 케미 조합 정의 (MVP용 샘플)
+    // 조합 조건: blocks 배열 = [블럭키, ...] 순서대로 인접 배치 필요
+    // 효과 타입: 'add_damage' | 'mult_damage' | 'add_heal' | 'mult_heal'
+    CHEMISTRY: [
+        {
+            id: 'twin_heroes',
+            name: '쌍둥이 영웅',
+            description: '영웅 둘이 나란히',
+            blocks: ['hero', 'hero'],
+            effect: { type: 'mult_damage', value: 1.3 },  // 데미지 1.3배
+        },
+        {
+            id: 'armed_hero',
+            name: '무장한 영웅',
+            description: '영웅 + 장비 조합',
+            blocks: ['hero', 'equip'],
+            effect: { type: 'add_damage', value: 15 },    // +15 고정 데미지
+        },
+        {
+            id: 'double_potion',
+            name: '이중 조제',
+            description: 'HP 물약 둘',
+            blocks: ['potion_hp', 'potion_hp'],
+            effect: { type: 'mult_heal', value: 2.0 },    // 회복 2배
+        },
+        {
+            id: 'balanced_potion',
+            name: '균형의 조제',
+            description: 'HP와 MP의 조화',
+            blocks: ['potion_hp', 'potion_mp'],
+            effect: { type: 'add_heal', value: 20 },      // +20 고정 회복
+        },
+    ],
 
     // 스테이지 데이터
     STAGES: [

@@ -1,7 +1,6 @@
 /**
  * CombatManager.js
- * 턴제 전투 관리
- * 스테이지 데이터 기반으로 적군 초기화
+ * 턴제 전투 관리 (케미 적용)
  */
 class CombatManager {
     /**
@@ -48,18 +47,20 @@ class CombatManager {
     }
 
     /**
-     * 대기칸 블럭들 순서대로 발동
+     * 대기칸 블럭들 순서대로 발동 (케미 적용)
+     * @param {Block[]} blocks - 왼→오 (null 없음)
+     * @param {ChemistryManager} chemistry - 케미 매니저 (옵션)
      */
-    executeTurn(blocks) {
+    executeTurn(blocks, chemistry = null) {
         if (this.isBattleOver) {
-            return { effects: [], enemyDmg: 0, result: 'already_over' };
+            return { effects: [], enemyDmg: 0, result: 'already_over', chemistryMatches: [] };
         }
 
         const effects = [];
         let totalDamage = 0;
         let totalHeal = 0;
 
-        // 블럭 효과 발동
+        // 1단계: 블럭 기본 효과 계산
         for (const block of blocks) {
             const effect = this.calculateBlockEffect(block);
             effects.push({
@@ -75,35 +76,45 @@ class CombatManager {
             }
         }
 
-        // 적군 데미지
+        // 2단계: 케미 매칭 및 효과 적용
+        let chemistryMatches = [];
+        if (chemistry) {
+            const matches = chemistry.detectMatches(blocks);
+            const result = chemistry.applyEffects(matches, totalDamage, totalHeal);
+            totalDamage = result.damage;
+            totalHeal = result.heal;
+            chemistryMatches = result.appliedMatches;
+        }
+
+        // 3단계: 적군 데미지
         this.enemyHp = Math.max(0, this.enemyHp - totalDamage);
 
-        // 플레이어 회복
+        // 4단계: 플레이어 회복
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + totalHeal);
 
         // 적군 처치 확인
         if (this.enemyHp <= 0) {
             this.isBattleOver = true;
-            return { effects, enemyDmg: 0, result: 'victory' };
+            return { effects, enemyDmg: 0, result: 'victory', chemistryMatches, totalDamage, totalHeal };
         }
 
-        // 적군 반격
+        // 5단계: 적군 반격
         const enemyDmg = this.enemyAttack;
         this.playerHp = Math.max(0, this.playerHp - enemyDmg);
 
-        // 플레이어 사망 확인
         if (this.playerHp <= 0) {
             this.isBattleOver = true;
-            return { effects, enemyDmg, result: 'defeat' };
+            return { effects, enemyDmg, result: 'defeat', chemistryMatches, totalDamage, totalHeal };
         }
 
         console.log(
             `[Combat] 턴 완료 | 데미지:${totalDamage} 회복:${totalHeal}` +
+            ` | 케미:${chemistryMatches.length}건` +
             ` | 적HP:${this.enemyHp}/${this.enemyMaxHp}` +
             ` | 내HP:${this.playerHp}/${this.playerMaxHp}` +
             ` | 적반격:${enemyDmg}`
         );
 
-        return { effects, enemyDmg, result: 'continue' };
+        return { effects, enemyDmg, result: 'continue', chemistryMatches, totalDamage, totalHeal };
     }
 }
