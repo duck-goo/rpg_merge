@@ -9,7 +9,7 @@ class StageManager {
      */
     constructor(scene) {
         this.scene = scene;
-        this.currentIndex = 0;
+        this.currentIndex = GameData.stage.currentIndex || 0;
         this.stages = CONFIG.STAGES;
         this.isTransitioning = false;
     }

@@ -41,8 +41,11 @@ const gameConfig = {
     },
 
     // 등록할 씬 목록
-    scene: [GameScene],
+    scene: [LobbyScene, DungeonScene],
 };
+
+// Phase 3-1: 저장 데이터 로드 (게임 시작 전에 반드시 선행)
+SaveManager.load();
 
 // 게임 인스턴스 생성 및 실행
 const game = new Phaser.Game(gameConfig);

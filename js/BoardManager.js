@@ -6,7 +6,7 @@
 class BoardManager {
     /**
      * @param {Phaser.Scene} scene
-     * @param {object} boardInfo - GameScene에서 계산한 레이아웃 정보
+     * @param {object} boardInfo - DungeonScene에서 계산한 레이아웃 정보
      */
     constructor(scene, boardInfo) {
         this.scene = scene;

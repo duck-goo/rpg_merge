@@ -167,4 +167,78 @@ const CONFIG = {
         { stage: 4, enemy: { name: '오크 전사',  hp: 220, attack: 11 } },
         { stage: 5, enemy: { name: '다크 나이트', hp: 300, attack: 15 } },
     ],
+
+    // ─── Phase 3-3: 로비 마을 ─────────────────
+    
+    // 로비 건물 목록 (지침서 3.4 기준 18종)
+    // Phase 3-3에서는 시각 배치만. 3-5부터 실제 기능 연결.
+    LOBBY_BUILDINGS: [
+        // 생산
+        { id: 'farm',       name: '농장',       category: 'production',     unlockLevel: 1,  icon: '🌾' },
+        { id: 'lumberyard', name: '벌목장',     category: 'production',     unlockLevel: 3,  icon: '🪓' },
+        { id: 'quarry',     name: '채석장',     category: 'production',     unlockLevel: 5,  icon: '🪨' },
+        { id: 'market',     name: '시장',       category: 'production',     unlockLevel: 5,  icon: '🏪' },
+        { id: 'mine',       name: '광산',       category: 'production',     unlockLevel: 10, icon: '⛏️' },
+        { id: 'shrine',     name: '여신상',     category: 'production',     unlockLevel: 15, icon: '💎' },
+        // 패시브 기본
+        { id: 'training',   name: '훈련소',     category: 'passive_basic',  unlockLevel: 10, icon: '🥊' },
+        { id: 'canteen',    name: '식당',       category: 'passive_basic',  unlockLevel: 10, icon: '🍖' },
+        { id: 'smithy',     name: '대장간',     category: 'passive_basic',  unlockLevel: 15, icon: '🔨' },
+        { id: 'alchemy',    name: '연금술 공방', category: 'passive_basic',  unlockLevel: 15, icon: '⚗️' },
+        // 패시브 직업
+        { id: 'barracks',   name: '기사단 병영', category: 'passive_job',    unlockLevel: 20, icon: '🛡️' },
+        { id: 'archery',    name: '사격장',     category: 'passive_job',    unlockLevel: 20, icon: '🎯' },
+        { id: 'magehall',   name: '마법전당',   category: 'passive_job',    unlockLevel: 20, icon: '🔮' },
+        { id: 'cathedral',  name: '성당',       category: 'passive_job',    unlockLevel: 20, icon: '⛪' },
+        { id: 'tavern',     name: '선술집',     category: 'passive_job',    unlockLevel: 20, icon: '🍺' },
+        // 패시브 시스템
+        { id: 'warehouse',  name: '창고',       category: 'passive_system', unlockLevel: 10, icon: '📦' },
+        { id: 'command',    name: '지휘소',     category: 'passive_system', unlockLevel: 20, icon: '🚩' },
+        { id: 'lab',        name: '전술 연구소', category: 'passive_system', unlockLevel: 25, icon: '📜' },
+    ],
+
+    // 로비 메뉴 버튼 6종 (Phase 3 각 단계에서 연결)
+    LOBBY_MENUS: [
+        { id: 'summon',    label: '소환', icon: '🎲', phase: '3-12' },
+        { id: 'warehouse', label: '창고', icon: '📦', phase: '3-10' },
+        { id: 'book',      label: '도감', icon: '📚', phase: '3-16' },
+        { id: 'quest',     label: '의뢰', icon: '📜', phase: '3-15' },
+        { id: 'dispatch',  label: '파견', icon: '🚶', phase: '3-17' },
+        { id: 'settings',  label: '설정', icon: '⚙️', phase: '3-21' },
+    ],
+
+    // 로비 UI 상수
+    LOBBY: {
+        TAP_THRESHOLD_PX: 8,    // 드래그/탭 구분 임계값
+        TILE_SIZE: 72,          // 건물 타일 크기
+        TILE_GAP: 16,
+        CATEGORY_GAP: 36,       // 카테고리 간 추가 간격
+    },
+
+    // ─── Phase 3-3: 탭 내비게이션 ─────────────────
+
+    // 하단 탭 정의 (순서: 영웅-마을-던전-창고-이벤트)
+    TABS: [
+        { id: 'hero',    label: '영웅',   icon: '👤',  pageName: '영웅' },
+        { id: 'village', label: '마을',   icon: '🏘️', pageName: '마을' },
+        { id: 'dungeon', label: '던전',   icon: '⚔️',  pageName: '로비' },
+        { id: 'storage', label: '창고',   icon: '📦',  pageName: '창고' },
+        { id: 'event',   label: '이벤트', icon: '🎁',  pageName: '이벤트' },
+    ],
+
+    // 초기 진입 탭 (던전 탭이 중앙이자 메인)
+    DEFAULT_TAB_ID: 'dungeon',
+
+    // 상단 HUD에 표시할 자원 3종 (나머지 3종은 상점 팝업에서 표시 예정)
+    RESOURCE_HUD_KEYS: [
+        { key: 'gold', icon: '💰' },
+        { key: 'food', icon: '🍞' },
+        { key: 'gem',  icon: '💎' },
+    ],
+
+    // HUD/TabBar 높이 상수
+    LOBBY_LAYOUT: {
+        HUD_HEIGHT: 48,
+        TABBAR_HEIGHT: 64,
+    },
 };

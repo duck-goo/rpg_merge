@@ -1,36 +1,39 @@
 /**
  * TutorialManager.js
  * 스테이지별 튜토리얼 표시 기록 관리
- * - 세션 메모리 기반 (새로고침하면 리셋)
- * - Phase 3에서 영속 저장 시스템 도입 시 저장 방식 교체
+ *
+ * Phase 3-1 변경:
+ * - 세션 Set → GameData.tutorial.seenStages 배열로 영속화
+ * - markSeen 호출 시 SaveManager.requestSave()로 자동 저장
  */
 class TutorialManager {
     constructor(scene) {
         this.scene = scene;
-
-        // 이미 본 스테이지 번호 집합
-        this.seenStages = new Set();
+        // 내부 상태 없음. GameData.tutorial.seenStages를 직접 참조.
     }
 
     /**
-     * 해당 스테이지 튜토리얼이 있는지
+     * 해당 스테이지 튜토리얼이 정의되어 있는지
      */
     hasTutorial(stageNumber) {
         return (stageNumber in CONFIG.TUTORIAL);
     }
 
     /**
-     * 이미 본 스테이지인지
+     * 이미 본 스테이지인지 (영속 저장 기반)
      */
     hasSeen(stageNumber) {
-        return this.seenStages.has(stageNumber);
+        return GameData.tutorial.seenStages.includes(stageNumber);
     }
 
     /**
-     * 본 기록 추가
+     * 본 기록 추가 + 자동 저장
      */
     markSeen(stageNumber) {
-        this.seenStages.add(stageNumber);
+        if (this.hasSeen(stageNumber)) return;
+        GameData.tutorial.seenStages.push(stageNumber);
+        SaveManager.requestSave();
+        console.log(`[Tutorial] 본 기록 저장: Stage ${stageNumber}`);
     }
 
     /**

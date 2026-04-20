@@ -1,10 +1,17 @@
 /**
- * GameScene.js
- * Phase 1-8: 스테이지 5개 + 클리어/패배 판정
+ * DungeonScene.js (구 GameScene.js)
+ * Phase 3-2: 씬 분리 — 던전(전투)만 담당
+ *
+ * 변경점:
+ * - 클래스명 GameScene → DungeonScene
+ * - scene key 'GameScene' → 'DungeonScene'
+ * - [로비로] 버튼 추가 (상단 좌측)
+ * - 모든 스테이지 클리어 시 자동 로비 복귀
+ * - GameData.stage.currentIndex 반영 + highestCleared 갱신
  */
-class GameScene extends Phaser.Scene {
+class DungeonScene extends Phaser.Scene {
     constructor() {
-        super({ key: 'GameScene' });
+        super({ key: 'DungeonScene' });
         this.boardInfo = null;
         this.boardManager = null;
         this.queueManager = null;
@@ -13,7 +20,6 @@ class GameScene extends Phaser.Scene {
         this.inventoryManager = null;
         this.inventoryUI = null;
 
-        // UI 참조
         this.enemyHpBar = null;
         this.enemyHpText = null;
         this.enemyNameText = null;
@@ -27,6 +33,11 @@ class GameScene extends Phaser.Scene {
         this.retryDialogUI = null;
         this.tutorialManager = null;
         this.tutorialDialogUI = null;
+
+        // Phase 3-2 신규
+        this.lobbyBtnBg = null;
+        this.lobbyBtnText = null;
+        this.lobbyBtnZone = null;
     }
 
     preload() {}
@@ -34,13 +45,13 @@ class GameScene extends Phaser.Scene {
     create() {
         const { width, height } = this.scale;
 
+        console.log('[DungeonScene] create (stage index = ' + GameData.stage.currentIndex + ')');
+
         this.boardInfo = this._calculateBoardLayout(width, height);
 
-        // 배경 UI
         this._drawBoardBackground();
         this._drawQueueSlots(width, height);
 
-        // 매니저 생성
         this.boardManager = new BoardManager(this, this.boardInfo);
         this.queueManager = new QueueManager(this, width, height);
         this.stageManager = new StageManager(this);
@@ -53,67 +64,91 @@ class GameScene extends Phaser.Scene {
         this.tutorialManager = new TutorialManager(this);
         this.tutorialDialogUI = new TutorialDialogUI(this);
 
-        // 전투 매니저 (현재 스테이지 기준)
         const stageData = this.stageManager.getCurrentStage();
         this.combatManager = new CombatManager(this, stageData.enemy);
 
-        // 전투 UI
         this._createEnemyUI(width, height);
         this._createPlayerUI(width, height);
         this._createButtons(width, height);
+        this._createLobbyButton(width, height);   // Phase 3-2 신규
         this._createMessageArea(width, height);
 
-        // 드래그
         this._setupDragEvents();
 
-        console.log('[GameScene] Phase 1-8: 스테이지 시스템 완료');
-        // 첫 스테이지 튜토리얼 (약간 지연 후 자연스럽게)
+        console.log('[DungeonScene] Phase 3-2: 씬 분리 완료');
         this.time.delayedCall(300, () => this._tryShowTutorial());
     }
 
     update(time, delta) {}
 
+    // ─── Phase 3-2 신규: 로비 복귀 버튼 ─────────────────────────────
+
+    _createLobbyButton(gameWidth, gameHeight) {
+        const btnW = 56;
+        const btnH = 24;
+        const btnX = 8;
+        const btnY = 8;
+
+        this.lobbyBtnBg = this.add.graphics();
+        this.lobbyBtnBg.fillStyle(0x555555, 1);
+        this.lobbyBtnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 4);
+
+        this.lobbyBtnText = this.add.text(
+            btnX + btnW / 2, btnY + btnH / 2,
+            '로비로',
+            {
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '11px',
+                color: '#ffffff',
+            }
+        ).setOrigin(0.5);
+
+        const zone = this.add.zone(btnX + btnW / 2, btnY + btnH / 2, btnW, btnH);
+        zone.setInteractive({ useHandCursor: true });
+        zone.on('pointerdown', () => this._returnToLobby());
+        this.lobbyBtnZone = zone;
+    }
+
+    _returnToLobby() {
+        // 전투 중이든 아니든 언제나 로비로 복귀 가능 (사용자 편의)
+        // 현재 진행 상태는 저장하지 않음 → 다음 진입 시 1스테이지부터
+        console.log('[DungeonScene] → LobbyScene');
+        this.scene.start('LobbyScene');
+    }
+
     // ─── 스테이지 전환 ─────────────────────────────
 
-    /**
-     * 다음 스테이지로 전환
-     */
     _goToNextStage() {
         const sm = this.stageManager;
 
         if (!sm.hasNextStage()) {
-            this._showMessage('모든 스테이지 클리어! 축하합니다!');
+            this._showMessage('모든 스테이지 클리어! 로비로 이동...');
+            // 최종 클리어 → 자동 로비 복귀
+            this.time.delayedCall(2500, () => this._returnToLobby());
             return;
         }
 
         sm.isTransitioning = true;
         sm.advance();
 
-        const stageData = sm.getCurrentStage();
+        // GameData 동기화
+        GameData.stage.currentIndex = sm.currentIndex;
+        SaveManager.requestSave();
 
-        // 전투 매니저 재생성
+        const stageData = sm.getCurrentStage();
         this.combatManager = new CombatManager(this, stageData.enemy);
 
-        // 보드 + 대기칸 초기화
         this.boardManager.resetBoard();
         this.queueManager.clearAll();
-
-        // 광고 횟수 리셋 (다음 스테이지)
         if (this.retryManager) this.retryManager.resetForNewStage();
 
-        // UI 갱신
         this._refreshAllUI();
         this._showMessage(`스테이지 ${sm.getStageNumber()} 시작!`);
 
         sm.isTransitioning = false;
-
-        // 새 스테이지 튜토리얼 시도
         this.time.delayedCall(600, () => this._tryShowTutorial());
     }
 
-    /**
-     * 현재 스테이지 재시작
-     */
     _restartStage() {
         const sm = this.stageManager;
 
@@ -121,26 +156,17 @@ class GameScene extends Phaser.Scene {
         sm.restart();
 
         const stageData = sm.getCurrentStage();
-
-        // 전투 매니저 재생성 (HP 풀 리셋)
         this.combatManager = new CombatManager(this, stageData.enemy);
 
-        // 보드 + 대기칸 초기화
         this.boardManager.resetBoard();
-        // 패배 → 인벤 소멸 (지침서)
         this.inventoryManager.clearAll();
         this.queueManager.clearAll();
-
-        // 광고 횟수 리셋 (포기 = 새 도전)
         if (this.retryManager) this.retryManager.resetForNewStage();
 
-        // UI 갱신
         this._refreshAllUI();
         this._showMessage(`스테이지 ${sm.getStageNumber()} 시작!`);
 
         sm.isTransitioning = false;
-
-        // 새 스테이지 튜토리얼 시도
         this.time.delayedCall(600, () => this._tryShowTutorial());
     }
 
@@ -150,16 +176,13 @@ class GameScene extends Phaser.Scene {
         const y = gameHeight * CONFIG.LAYOUT.ENEMY_Y;
         const h = gameHeight * CONFIG.LAYOUT.ENEMY_HEIGHT;
         const centerY = y + h / 2;
-        const cm = this.combatManager;
 
-        // 스테이지 번호
         this.stageText = this.add.text(gameWidth / 2, y + 6, '', {
             fontFamily: 'Arial, sans-serif',
             fontSize: '11px',
             color: '#888888',
         }).setOrigin(0.5, 0);
 
-        // 적 이름
         this.enemyNameText = this.add.text(gameWidth / 2, centerY - 20, '', {
             fontFamily: 'Arial, sans-serif',
             fontSize: '16px',
@@ -167,7 +190,6 @@ class GameScene extends Phaser.Scene {
             fontStyle: 'bold',
         }).setOrigin(0.5);
 
-        // HP바
         const barWidth = 200;
         const barHeight = 16;
         const barX = (gameWidth - barWidth) / 2;
@@ -186,8 +208,6 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5, 0);
 
         this._enemyBarInfo = { x: barX, y: barY, w: barWidth, h: barHeight };
-
-        // 초기값 표시
         this._refreshEnemyUI();
     }
 
@@ -222,7 +242,6 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0, 0.5);
 
         this._playerBarInfo = { x: barX, y: barY, w: barWidth, h: barHeight };
-
         this._refreshPlayerUI();
     }
 
@@ -300,9 +319,6 @@ class GameScene extends Phaser.Scene {
 
     // ─── 리트라이 ─────────────────────────────
 
-    /**
-     * 패배 시 리트라이 선택 팝업 열기
-     */
     _openRetryDialog() {
         this.retryDialogUI.openRetryDialog(
             () => this._onAdRetrySelected(),
@@ -310,58 +326,34 @@ class GameScene extends Phaser.Scene {
         );
     }
 
-    /**
-     * "광고 시청" 선택 → 광고 시뮬 → HP 회복 후 재개
-     */
     _onAdRetrySelected() {
         if (!this.retryManager.canUseAd()) {
             this._showMessage('이미 광고를 사용했습니다');
             return;
         }
-
-        // 광고 진행 오버레이 표시
         const duration = CONFIG.RETRY.AD_DURATION_MS;
         this.retryDialogUI.showAdPlaying(duration);
-
-        // 광고 시뮬 실행 → 완료 시 복귀
         this.retryManager.playAd(() => {
             this.retryDialogUI.closeAdPlaying();
             this._continueFromRetry();
         });
     }
 
-    /**
-     * "포기" 선택 → 완전 재시작 (기존 _restartStage)
-     */
     _onGiveUpSelected() {
         this._restartStage();
     }
 
-    /**
-     * 광고 리트라이 복귀
-     * 플레이어 HP만 풀 회복, 보드/인벤/대기칸/적 상태는 유지
-     */
     _continueFromRetry() {
         const cm = this.combatManager;
-
-        // 플레이어 HP 풀 회복
         cm.playerHp = cm.playerMaxHp;
-
-        // 전투 종료 플래그 해제 (다시 플레이 가능)
         cm.isBattleOver = false;
-
-        // UI 갱신
         this._refreshAllUI();
         this._showMessage('HP 회복! 전투 재개');
-
         console.log('[Retry] 광고 리트라이 성공 → 전투 재개');
     }
 
     // ─── 튜토리얼 ─────────────────────────────
 
-    /**
-     * 현재 스테이지 튜토리얼 시도 (안 본 경우만 표시)
-     */
     _tryShowTutorial() {
         const stageNum = this.stageManager.getStageNumber();
         const tm = this.tutorialManager;
@@ -371,17 +363,12 @@ class GameScene extends Phaser.Scene {
         const data = tm.getTutorial(stageNum);
         if (!data) return;
 
-        // 표시 + "본 기록" 저장 (팝업 여는 순간 기록)
         tm.markSeen(stageNum);
         this.tutorialDialogUI.show(data.title, data.body, () => {
             console.log(`[Tutorial] 완료: Stage ${stageNum}`);
         });
     }
 
-    /**
-     * 보드 블럭 → 인벤토리
-     * @returns {boolean} 성공 여부
-     */
     _moveBoardBlockToInventory(block) {
         if (this.inventoryManager.isFull()) {
             this._showMessage('인벤토리가 꽉 찼습니다');
@@ -391,32 +378,25 @@ class GameScene extends Phaser.Scene {
         const slotIdx = this.inventoryManager.addItem(block.blockType, block.grade);
         if (slotIdx === -1) return false;
 
-        // 보드에서 제거
         const col = block.boardCol;
         const row = block.boardRow;
         this.boardManager.grid[row][col] = null;
         block.destroy();
 
-        // 보드 리필
         this.boardManager.refillBoard();
         return true;
     }
 
-      // ─── 발동 로직 ─────────────────────────────
+    // ─── 발동 로직 ─────────────────────────────
 
     _onActivate() {
         const qm = this.queueManager;
         const cm = this.combatManager;
         const sm = this.stageManager;
 
-        if (cm.isBattleOver || sm.isTransitioning) {
-            return;
-        }
-        if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) {
-            return;
-        }
+        if (cm.isBattleOver || sm.isTransitioning) return;
+        if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
 
-        // 대기칸 블럭 수집
         const blocks = [];
         for (let i = 0; i < qm.slotCount; i++) {
             if (qm.slots[i] !== null) {
@@ -429,16 +409,11 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // 전투 실행
         const result = cm.executeTurn(blocks, this.chemistryManager);
 
-        // 발동 블럭 제거
         qm.clearAll();
-
-        // UI 갱신
         this._refreshHpBars();
 
-        // 결과 처리
         const dmgTotal = result.effects
             .filter(e => e.type === 'damage')
             .reduce((sum, e) => sum + e.value, 0);
@@ -447,18 +422,24 @@ class GameScene extends Phaser.Scene {
             .reduce((sum, e) => sum + e.value, 0);
 
         if (result.result === 'victory') {
+            // Phase 3-2: 클리어 시 최고 기록 갱신
+            const clearedStageNum = sm.getStageNumber();
+            if (clearedStageNum > GameData.stage.highestCleared) {
+                GameData.stage.highestCleared = clearedStageNum;
+                SaveManager.requestSave();
+            }
+
             if (sm.hasNextStage()) {
                 this._showMessage(`스테이지 ${sm.getStageNumber()} 클리어!`);
                 this.time.delayedCall(2000, () => this._goToNextStage());
             } else {
-                this._showMessage('모든 스테이지 클리어! 축하합니다!');
+                this._showMessage('모든 스테이지 클리어! 로비로 이동...');
+                this.time.delayedCall(2500, () => this._returnToLobby());
             }
         } else if (result.result === 'defeat') {
-            // 리트라이 선택지 팝업 표시
             this._showMessage('패배...');
             this.time.delayedCall(800, () => this._openRetryDialog());
         } else {
-            // 케미 적용 후 실제 수치 (result.totalDamage / totalHeal)
             const realDmg = result.totalDamage ?? dmgTotal;
             const realHeal = result.totalHeal ?? healTotal;
 
@@ -467,7 +448,6 @@ class GameScene extends Phaser.Scene {
             if (realHeal > 0) msg += `회복 ${realHeal}  `;
             if (result.enemyDmg > 0) msg += `적 반격 ${result.enemyDmg}`;
 
-            // 케미 발동 이름 표시
             if (result.chemistryMatches && result.chemistryMatches.length > 0) {
                 const names = result.chemistryMatches.map(m => m.recipe.name).join(', ');
                 msg += `\n✨ ${names}`;
@@ -493,7 +473,6 @@ class GameScene extends Phaser.Scene {
         if (ratio > 0) {
             this.enemyHpBar.fillRoundedRect(ei.x, ei.y, ei.w * ratio, ei.h, 4);
         }
-
         this.enemyHpText.setText(`${cm.enemyHp} / ${cm.enemyMaxHp}`);
     }
 
@@ -507,7 +486,6 @@ class GameScene extends Phaser.Scene {
         if (ratio > 0) {
             this.playerHpBar.fillRoundedRect(pi.x, pi.y, pi.w * ratio, pi.h, 3);
         }
-
         this.playerHpText.setText(`${cm.playerHp}`);
     }
 
@@ -524,7 +502,7 @@ class GameScene extends Phaser.Scene {
     _showMessage(text) {
         this.messageText.setText(text);
         this.time.delayedCall(3000, () => {
-            if (this.messageText.text === text) {
+            if (this.messageText && this.messageText.text === text) {
                 this.messageText.setText('');
             }
         });
@@ -570,7 +548,6 @@ class GameScene extends Phaser.Scene {
             } else if (block.location === 'queue') {
                 this._handleQueueBlockDrop(pointer, block);
             }
-            // inventory 블럭은 드래그 불가 (탭으로 삭제만 가능)
         });
     }
 
@@ -578,7 +555,6 @@ class GameScene extends Phaser.Scene {
         const bm = this.boardManager;
         const qm = this.queueManager;
 
-        // ① 대기칸 영역에 드롭
         if (qm.isInQueueArea(pointer.x, pointer.y)) {
             const slotIndex = qm.screenToSlot(pointer.x, pointer.y);
             if (slotIndex >= 0 && qm.slots[slotIndex] === null) {
@@ -593,7 +569,6 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // ①-b 인벤 버튼 위로 드롭 → 인벤토리에 추가
         if (this._isOverInventoryButton(pointer.x, pointer.y)) {
             if (!this._moveBoardBlockToInventory(block)) {
                 bm.snapToCell(block);
@@ -601,36 +576,28 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // ② 보드 내 드롭
         const dropPos = bm.screenToBoard(pointer.x, pointer.y);
 
-        // 보드 밖 or 같은 칸 → 원위치
         if (!dropPos ||
             (dropPos.col === block.boardCol && dropPos.row === block.boardRow)) {
             bm.snapToCell(block);
             return;
         }
 
-        // ③ 빈칸으로 이동 (거리 제약 없음)
         if (bm.isEmpty(dropPos.col, dropPos.row)) {
             bm.moveToEmpty(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
             return;
         }
 
-        // ④ 머지 가능 → 머지 + 리필
         if (bm.canMerge(block.boardCol, block.boardRow, dropPos.col, dropPos.row)) {
             bm.mergeBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
             bm.refillBoard();
             return;
         }
 
-        // ⑤ 교환
         bm.swapBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
     }
 
-    /**
-     * 화면 좌표가 [인벤] 버튼 위인지 판정
-     */
     _isOverInventoryButton(screenX, screenY) {
         const layout = CONFIG.LAYOUT;
         const { width: gw, height: gh } = this.scale;
@@ -641,12 +608,11 @@ class GameScene extends Phaser.Scene {
         const btnW = 70;
         const btnH = 36;
         const btnGap = 20;
-        const labelCount = 4;  // 발동, 인벤, 스킬, 도감
+        const labelCount = 4;
         const totalW = (btnW * labelCount) + (btnGap * (labelCount - 1));
         const btnStartX = (gw - totalW) / 2;
         const btnY = y + (h - btnH) / 2;
 
-        // [인벤] 은 인덱스 1 (0:발동, 1:인벤, 2:스킬, 3:도감)
         const invBtnX = btnStartX + 1 * (btnW + btnGap);
 
         return (
@@ -673,7 +639,7 @@ class GameScene extends Phaser.Scene {
         qm.snapToSlot(block);
     }
 
-        _calculateBoardLayout(gameWidth, gameHeight) {
+    _calculateBoardLayout(gameWidth, gameHeight) {
         const layout = CONFIG.LAYOUT;
         const board = CONFIG.BOARD;
 
@@ -696,8 +662,6 @@ class GameScene extends Phaser.Scene {
             cols: board.COLS, rows: board.ROWS, gap: board.GAP,
         };
     }
-
-    // ─── 그리기 ─────────────────────────────
 
     _drawBoardBackground() {
         const { cellSize, startX, startY, cols, rows, gap } = this.boardInfo;

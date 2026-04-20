@@ -36,10 +36,13 @@
 
     <!-- Phaser 3.80.1 (안정 버전 고정) -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-
-    <!-- 전역 설정 -->
     <script src="js/config.js"></script>
-
+    
+    <!-- Phase 3-1: 영속 저장 -->
+    <script src="js/GameData.js"></script>
+    <script src="js/SaveManager.js"></script>
+    <script src="js/EventBus.js"></script>
+    
     <!-- 게임 오브젝트 -->
     <script src="js/Block.js"></script>
     <script src="js/BoardManager.js"></script>
@@ -54,11 +57,22 @@
     <script src="js/RetryDialogUI.js"></script>
     <script src="js/TutorialManager.js"></script>
     <script src="js/TutorialDialogUI.js"></script>
-
+    
+    <!-- Phase 3-3: 로비 UI 컴포넌트 -->
+    <script src="js/ui/TopHud.js"></script>
+    <script src="js/ui/TabBar.js"></script>
+    <script src="js/ui/Toast.js"></script>
+    
+    <!-- Phase 3-3: 로비 탭 컴포넌트 -->
+    <script src="js/LobbyVillage.js"></script>
+    <script src="js/tabs/PlaceholderTab.js"></script>
+    <script src="js/tabs/VillageTab.js"></script>
+    <script src="js/tabs/DungeonTab.js"></script>
+    
     <!-- 게임 씬 -->
-    <script src="js/GameScene.js"></script>
-
-    <!-- 게임 설정 및 실행 -->
+    <script src="js/DungeonScene.js"></script>
+    <script src="js/LobbyScene.js"></script>
+    
     <script src="js/main.js"></script>
 </body>
 </html>
