@@ -12,6 +12,24 @@
 const SCHEMA_VERSION = 1;
 
 /**
+ * 기본 건물 상태 객체 생성
+ * CONFIG.LOBBY_BUILDINGS의 모든 id에 대해 level=0 엔트리를 만듦
+ * CONFIG 로드가 GameData보다 먼저 이루어지므로 안전함 (index.html 순서로 보장)
+ */
+function _createDefaultBuildings() {
+    const result = {};
+    const buildings = (typeof CONFIG !== 'undefined' && CONFIG.LOBBY_BUILDINGS) ? CONFIG.LOBBY_BUILDINGS : [];
+    for (const def of buildings) {
+        result[def.id] = {
+            level: 0,         // 0 = 건설 전
+            producedAt: 0,    // Phase 3-7에서 사용 (생산 마지막 계산 시각)
+            stock: 0,         // Phase 3-7에서 사용 (수거 대기 재고)
+        };
+    }
+    return result;
+}
+
+/**
  * 기본값 GameData를 새로 생성해서 반환 (깊은 복사)
  * - 공유 참조 돌연변이 방지를 위해 매번 새 객체 생성
  */
@@ -22,32 +40,38 @@ function createDefaultGameData() {
         meta: {
             createdAt: now,
             updatedAt: now,
+            pendingLevelUp: null,
         },
         account: {
             level: 1,
             exp: 0,
         },
-        // 지침서 3.1 초기 자원: 골드 100, 목재 50, 석재 30, 식량 50
         resources: {
-            gold: 100,
-            wood: 50,
-            stone: 30,
-            iron: 0,
-            food: 50,
-            gem: 0,
+            gold: 100, wood: 50, stone: 30,
+            iron: 0,   food: 50, gem: 0,
         },
         stage: {
-            currentIndex: 0,      // 현재 도전 중인 스테이지 (0-based)
-            highestCleared: 0,    // 지금까지 클리어한 최고 스테이지 (1-based, 0=없음)
+            currentIndex: 0,
+            highestCleared: 0,
         },
         tutorial: {
-            seenStages: [],       // 본 튜토리얼 스테이지 번호 배열 (1-based)
+            seenStages: [],
         },
         inventory: {
-            dungeonSlots: [],     // Phase 3-10에서 채움
-            lobbySlots: [],       // Phase 3-10에서 채움
+            dungeonSlots: [],
+            lobbySlots: [],
         },
-        buildings: {},            // Phase 3-5에서 채움: { id: { level, stock, producedAt } }
+        // ★ Phase 3-10: 창고 + 조각
+        storage: {
+            items: [],    // [{ blockTypeKey, grade }]
+            pendingItems: [],    // ★ 던전 이관 대기 (창고 탭 확인 전)
+        },
+        fragments: {
+            hero: 0,
+            equip: 0,
+            potion: 0,
+        },
+        buildings: _createDefaultBuildings(),
         settings: {
             bgm: 1.0,
             sfx: 1.0,

@@ -18,14 +18,15 @@ class DungeonTab {
         this.scene = scene;
         this.area = area;
         this.callbacks = callbacks;
-
+        
         this.container = null;
         this.progressText = null;
+        this.foodText = null;   // ★ 추가
         this.progressBar = null;
         this._progressBarRect = null;
-
+        
         this._boundRefreshProgress = null;
-
+        
         this._build();
         this._bindEvents();
         this.hide();
@@ -170,6 +171,14 @@ class DungeonTab {
         });
         this.container.add(this.progressText);
 
+        // ★ 추가: 우측 상단에 식량 표시
+        this.foodText = this.scene.add.text(bx + boxW - 12, by + 10, '', {
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '12px',
+            color: '#f39c12',
+        }).setOrigin(1, 0);
+        this.container.add(this.foodText);
+
         // 진행바 배경
         const barBgX = bx + 12;
         const barBgY = by + 36;
@@ -181,7 +190,6 @@ class DungeonTab {
         barBg.fillRoundedRect(barBgX, barBgY, barBgW, barBgH, 4);
         this.container.add(barBg);
 
-        // 진행바 (채움)
         this.progressBar = this.scene.add.graphics();
         this.container.add(this.progressBar);
         this._progressBarRect = { x: barBgX, y: barBgY, w: barBgW, h: barBgH };
@@ -207,11 +215,22 @@ class DungeonTab {
             this.progressBar.fillStyle(0x27ae60, 1);
             this.progressBar.fillRoundedRect(r.x, r.y, r.w * (percent / 100), r.h, 4);
         }
+
+        // ★ 추가: 식량 표시 갱신
+        if (this.foodText) {
+            const food = GameData.resources.food;
+            const cost = CONFIG.DUNGEON_COST.FOOD_PER_ENTRY;
+            const color = food >= cost ? '#f39c12' : '#e74c3c';
+            this.foodText.setText(`🍞 ${food} (입장 ${cost})`);
+            this.foodText.setColor(color);
+        }
     }
 
     _bindEvents() {
         this._boundRefreshProgress = () => this._refreshProgress();
         EventBus.on('stage:cleared', this._boundRefreshProgress);
+        // ★ 추가: 식량 수치 자동 갱신
+        EventBus.on('resources:changed', this._boundRefreshProgress);
     }
 
     show() {
@@ -227,6 +246,7 @@ class DungeonTab {
     destroy() {
         if (this._boundRefreshProgress) {
             EventBus.off('stage:cleared', this._boundRefreshProgress);
+            EventBus.off('resources:changed', this._boundRefreshProgress);   // ★ 추가
             this._boundRefreshProgress = null;
         }
         this.container = null;

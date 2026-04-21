@@ -238,7 +238,121 @@ const CONFIG = {
 
     // HUD/TabBar 높이 상수
     LOBBY_LAYOUT: {
-        HUD_HEIGHT: 48,
+        HUD_HEIGHT: 56,
         TABBAR_HEIGHT: 64,
     },
+
+    // ─── Phase 3-4: 던전 연결 ─────────────────
+
+    // 던전 입장 비용 (식량)
+    DUNGEON_COST: {
+        FOOD_PER_ENTRY: 5,   // 던전 한 번 입장 시 차감 (챕터 확장 시 재설계 예정)
+    },
+
+    // 스테이지별 클리어 보상 (지침서 3.1)
+    // Phase 3-4 조정: 식량은 보상에서 제외 (소모와 보상이 상쇄되어 피로도 무의미해지는 문제)
+    // 식량은 Phase 3-5 이후 농장 건물 생산 + Phase 3 상점 구매로만 획득
+    STAGE_REWARDS: {
+        1: { gold: 20, wood: 10, stone: 0,  food: 0 },
+        2: { gold: 30, wood: 15, stone: 5,  food: 0 },
+        3: { gold: 45, wood: 20, stone: 10, food: 0 },
+        4: { gold: 60, wood: 25, stone: 15, food: 0 },
+        5: { gold: 80, wood: 30, stone: 20, food: 0 },
+    },
+
+    // 경험치 설정
+    EXP_SETTINGS: {
+        // 스테이지 클리어 경험치: stageNumber × MULT
+        STAGE_CLEAR_MULT: 20,
+        // 다음 레벨 필요 경험치: currentLevel × BASE
+        LEVEL_UP_BASE: 100,
+        // 최대 레벨 (임의 상한, 나중에 확장)
+        MAX_LEVEL: 99,
+    },
+
+    // ─── Phase 3-5: 건물 스펙 ─────────────────
+
+    // 건물 18종 스펙 (LOBBY_BUILDINGS의 id와 1:1 매칭)
+    // 비용 공식: 다음레벨비용 = buildCost × (1 + costMult × (currentLevel - 1))
+    // 계정 레벨 요구: unlockLevel + currentLevel × levelPerAccount
+    //   (단, Lv.1 건설은 unlockLevel만 만족하면 됨)
+    // ─── Phase 3-5/3-6: 건물 스펙 ─────────────────
+
+    BUILDING_SPECS: {
+        // ─ 생산 ─
+        // ─ 생산 ─
+        farm:       { maxLevel: 20, buildCost: { gold: 50,  wood: 20 },              costMult: 0.5, levelPerAccount: 2, effect: '식량 자동 생산 (시간 누적)',
+                      production: { resource: 'food',  basePerHour: 10,  baseCap: 60  } },
+        lumberyard: { maxLevel: 20, buildCost: { gold: 80,  wood: 30 },              costMult: 0.5, levelPerAccount: 2, effect: '목재 자동 생산 (시간 누적)',
+                      production: { resource: 'wood',  basePerHour: 8,   baseCap: 48  } },
+        quarry:     { maxLevel: 20, buildCost: { gold: 100, wood: 40 },              costMult: 0.5, levelPerAccount: 2, effect: '석재 자동 생산 (시간 누적)',
+                      production: { resource: 'stone', basePerHour: 6,   baseCap: 36  } },
+        market:     { maxLevel: 20, buildCost: { gold: 150, wood: 30, stone: 20 },   costMult: 0.5, levelPerAccount: 2, effect: '골드 자동 생산 (시간 누적)',
+                      production: { resource: 'gold',  basePerHour: 20,  baseCap: 120 } },
+        mine:       { maxLevel: 20, buildCost: { gold: 200, wood: 50, stone: 30 },   costMult: 0.5, levelPerAccount: 3, effect: '철 자동 생산 (시간 누적)',
+                      production: { resource: 'iron',  basePerHour: 4,   baseCap: 24  } },
+        shrine:     { maxLevel: 10, buildCost: { gold: 500, wood: 100, stone: 80, iron: 30 }, costMult: 0.8, levelPerAccount: 5, effect: '보석(유료 재화) 소량 자동 생산',
+                      production: { resource: 'gem',   basePerHour: 0.2, baseCap: 2   } },
+
+        // ─ 패시브 기본 ─
+        training:   { maxLevel: 20, buildCost: { gold: 150, wood: 60, stone: 30 },   costMult: 0.5, levelPerAccount: 2, effect: '영웅 블럭 공격력 증가' },
+        canteen:    { maxLevel: 20, buildCost: { gold: 150, wood: 60, stone: 30 },   costMult: 0.5, levelPerAccount: 2, effect: '플레이어 최대 HP 증가' },
+        smithy:     { maxLevel: 20, buildCost: { gold: 250, wood: 80, stone: 50, iron: 20 },  costMult: 0.5, levelPerAccount: 2, effect: '장비 블럭 효과 증가' },
+        alchemy:    { maxLevel: 20, buildCost: { gold: 250, wood: 80, stone: 50, iron: 20 },  costMult: 0.5, levelPerAccount: 2, effect: 'HP/MP 물약 효과 증가' },
+
+        // ─ 패시브 직업 ─
+        barracks:   { maxLevel: 20, buildCost: { gold: 400, wood: 100, stone: 80, iron: 40 }, costMult: 0.5, levelPerAccount: 2, effect: '워리어 계열 영웅 강화' },
+        archery:    { maxLevel: 20, buildCost: { gold: 400, wood: 100, stone: 80, iron: 40 }, costMult: 0.5, levelPerAccount: 2, effect: '보우맨 계열 영웅 강화' },
+        magehall:   { maxLevel: 20, buildCost: { gold: 400, wood: 100, stone: 80, iron: 40 }, costMult: 0.5, levelPerAccount: 2, effect: '메이지 계열 영웅 강화' },
+        cathedral:  { maxLevel: 20, buildCost: { gold: 400, wood: 100, stone: 80, iron: 40 }, costMult: 0.5, levelPerAccount: 2, effect: '클레릭 계열 영웅 강화' },
+        tavern:     { maxLevel: 20, buildCost: { gold: 400, wood: 100, stone: 80, iron: 40 }, costMult: 0.5, levelPerAccount: 2, effect: '도적 계열 영웅 강화' },
+
+        // ─ 패시브 시스템 ─
+        warehouse:  { maxLevel: 10, buildCost: { gold: 200, wood: 80, stone: 60 },   costMult: 0.6, levelPerAccount: 5,  effect: '던전 인벤토리 확장 (Lv당 +1, 기본 5칸)' },
+        command:    { maxLevel: 2,  buildCost: { gold: 800, wood: 200, stone: 150, iron: 80 }, costMult: 1.0, levelPerAccount: 20, effect: '던전 대기칸 확장 (Lv당 +1, 최대 5칸)' },
+        lab:        { maxLevel: 20, buildCost: { gold: 300, wood: 100, stone: 80, iron: 30 }, costMult: 0.5, levelPerAccount: 2, effect: '케미 효과 상승' },
+    },
+
+    // 건물 상세 팝업 사이즈
+    BUILDING_POPUP: {
+        WIDTH: 300,
+        HEIGHT: 420,
+    },
 };
+
+/**
+ * 숫자를 K/M 단위로 축약
+ * 999 이하: 그대로 (예: 999)
+ * 1000~999999: K 단위 (예: 1.2K, 123K)
+ * 1000000 이상: M 단위 (예: 1.23M, 123M)
+ *
+ * 소수점 1자리 or 정수로 자동 결정:
+ * - 10 미만이면 소수점 2자리 (1.23K, 1.23M)
+ * - 10~99.9면 소수점 1자리 (12.3K, 12.3M)
+ * - 100 이상이면 정수 (123K, 123M)
+ */
+function formatCompactNumber(num) {
+    if (num === null || num === undefined || isNaN(num)) return '0';
+    const n = Number(num);
+    if (n < 1000) return String(Math.floor(n));
+
+    const units = [
+        { value: 1_000_000_000, suffix: 'B' },
+        { value: 1_000_000,     suffix: 'M' },
+        { value: 1_000,         suffix: 'K' },
+    ];
+
+    for (const u of units) {
+        if (n >= u.value) {
+            const scaled = n / u.value;
+            let formatted;
+            if (scaled < 10)       formatted = scaled.toFixed(2);
+            else if (scaled < 100) formatted = scaled.toFixed(1);
+            else                   formatted = Math.floor(scaled).toString();
+            // 소수점 끝 0 제거 (1.20K → 1.2K, 1.00K → 1K)
+            formatted = formatted.replace(/\.?0+$/, '');
+            return formatted + u.suffix;
+        }
+    }
+    return String(Math.floor(n));
+}

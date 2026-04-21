@@ -93,6 +93,44 @@ class LobbyVillage {
         }
     }
 
+    /**
+ * 마을 상태 변경 시 모든 타일 재렌더링
+ * (건설/레벨업 후 호출)
+ */
+    refresh() {
+        // 기존 타일의 모든 표시 객체 파괴
+        for (const tile of this.buildingTiles) {
+            for (const obj of tile.displayObjects) {
+                if (obj) obj.destroy();
+            }
+        }
+        // 카테고리 라벨도 같이 있으므로, container 내용을 전부 비우고 재생성하는 게 안전
+        if (this.container) {
+            this.container.removeAll(true);
+        }
+
+        this.buildingTiles = [];
+        this.contentWidth = 0;
+
+        // 다시 배치
+        this._placeBuildings();
+
+        // 스크롤 경계 재계산
+        const aw = this.area.width;
+        if (this.contentWidth <= aw) {
+            this._scrollEnabled = false;
+            this.minContainerX = this.area.x;
+            this.maxContainerX = this.area.x;
+        } else {
+            this._scrollEnabled = true;
+            this.minContainerX = this.area.x - (this.contentWidth - aw);
+            this.maxContainerX = this.area.x;
+        }
+
+        // 스크롤 위치 재보정 (이전보다 콘텐츠가 좁아졌다면)
+        this.container.x = Math.max(this.minContainerX, Math.min(this.maxContainerX, this.container.x));
+    }
+
     _placeBuildings() {
         const buildings = CONFIG.LOBBY_BUILDINGS;
         const { height: ah } = this.area;
@@ -140,19 +178,27 @@ class LobbyVillage {
     }
 
     /**
-     * 건물 타일 생성 (개별 Container는 쓰지 않고 평면 GameObject들을 컨테이너에 추가)
-     * → 마스크 상속 문제를 피하기 위해
+
+     * 건물 타일 생성 (3상태: locked / unbuilt / built)
      */
     _createBuildingTile(def, centerX, centerY) {
-        const currentLevel = GameData.account.level;
-        const locked = currentLevel < def.unlockLevel;
         const size = this.TILE_SIZE;
         const displayObjects = [];
 
-        // 배경
+        // Phase 3-5: BuildingManager로 상태 조회
+        const state = BuildingManager.getState(def.id);
+        const save = BuildingManager.getSave(def.id);
+        const locked = state === 'locked';
+        const unbuilt = state === 'unbuilt';
+        const built = state === 'built';
+
+        // 배경색 + 테두리
+        const bgColor = locked ? 0x1a1a2e : (unbuilt ? 0x2a2a3e : 0x16213e);
+        const borderColor = locked ? 0x555555 : (unbuilt ? 0x8a7042 : 0x5c6b8c);
+
         const bg = this.scene.add.graphics();
-        bg.fillStyle(locked ? 0x1a1a2e : 0x16213e, 1);
-        bg.lineStyle(2, locked ? 0x555555 : 0x5c6b8c, 1);
+        bg.fillStyle(bgColor, 1);
+        bg.lineStyle(2, borderColor, 1);
         bg.fillRoundedRect(centerX - size / 2, centerY - size / 2, size, size, 6);
         bg.strokeRoundedRect(centerX - size / 2, centerY - size / 2, size, size, 6);
         displayObjects.push(bg);
@@ -163,34 +209,85 @@ class LobbyVillage {
             fontSize: '30px',
         }).setOrigin(0.5);
         if (locked) icon.setAlpha(0.3);
+        else if (unbuilt) icon.setAlpha(0.55);
         displayObjects.push(icon);
 
         // 이름
+        const nameColor = locked ? '#666666' : (unbuilt ? '#c5a970' : '#ffffff');
         const nameText = this.scene.add.text(centerX, centerY + size / 2 - 10, def.name, {
             fontFamily: 'Arial, sans-serif',
             fontSize: '10px',
-            color: locked ? '#666666' : '#ffffff',
+            color: nameColor,
         }).setOrigin(0.5);
         displayObjects.push(nameText);
 
-        // 잠금 표시
+        // 상태별 오버레이
         if (locked) {
             const lock = this.scene.add.text(centerX, centerY - 2, '🔒', {
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '20px',
             }).setOrigin(0.5);
             displayObjects.push(lock);
+        } else if (unbuilt) {
+            // "건설 가능" 아이콘 (우상단 작게)
+            const hammer = this.scene.add.text(
+                centerX + size / 2 - 8, centerY - size / 2 + 8,
+                '🔨', {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '12px',
+                }
+            ).setOrigin(0.5);
+            displayObjects.push(hammer);
+        } else if (built) {
+            // Lv.N 뱃지 (좌상단)
+            const lvBg = this.scene.add.graphics();
+            lvBg.fillStyle(0xf1c40f, 1);
+            lvBg.fillRoundedRect(centerX - size / 2 + 3, centerY - size / 2 + 3, 28, 14, 3);
+            displayObjects.push(lvBg);
+            
+            const lvText = this.scene.add.text(
+                centerX - size / 2 + 17, centerY - size / 2 + 10,
+                `Lv.${save.level}`, {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '9px',
+                    color: '#000000',
+                    fontStyle: 'bold',
+                }
+            ).setOrigin(0.5);
+            displayObjects.push(lvText);
+        
+            // ★ Phase 3-7: 생산 건물이 상한 도달 시 ❗ 뱃지 (우상단)
+            if (typeof ProductionManager !== 'undefined' && ProductionManager.hasProduction(def.id)) {
+                const stock = ProductionManager.getStock(def.id);
+                if (stock.full) {
+                    const exBg = this.scene.add.graphics();
+                    exBg.fillStyle(0xe74c3c, 1);
+                    exBg.fillCircle(centerX + size / 2 - 8, centerY - size / 2 + 8, 8);
+                    displayObjects.push(exBg);
+                
+                    const exText = this.scene.add.text(
+                        centerX + size / 2 - 8, centerY - size / 2 + 8,
+                        '!', {
+                            fontFamily: 'Arial, sans-serif',
+                            fontSize: '11px',
+                            color: '#ffffff',
+                            fontStyle: 'bold',
+                        }
+                    ).setOrigin(0.5);
+                    displayObjects.push(exText);
+                }
+            }
         }
 
-        return {
-            def,
-            localCenterX: centerX,   // 컨테이너 내부 좌표
-            localCenterY: centerY,
-            size,
-            locked,
-            displayObjects,
-        };
-    }
+    return {
+        def,
+        localCenterX: centerX,
+        localCenterY: centerY,
+        size,
+        locked,
+        displayObjects,
+    };
+}
 
     // ─── 스크롤 & 탭 ─────────────────────
 

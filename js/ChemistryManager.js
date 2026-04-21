@@ -59,42 +59,65 @@ class ChemistryManager {
      * @param {number} baseHeal - 케미 적용 전 회복량
      * @returns {{ damage, heal, appliedMatches }}
      */
+    /**
+ * 매칭된 조합들의 효과를 합산
+ * Phase 3-9: 전술 연구소 패시브로 케미 효과 증폭
+ */
     applyEffects(matches, baseDamage, baseHeal) {
         let damage = baseDamage;
         let heal = baseHeal;
         const appliedMatches = [];
-
+    
+        // 전술 연구소 배율
+        const chemMult = (typeof PassiveManager !== 'undefined')
+            ? PassiveManager.getChemistryMult()
+            : 1.0;
+    
         for (const match of matches) {
             const effect = match.recipe.effect;
             const before = { damage, heal };
-
+        
             switch (effect.type) {
-                case 'add_damage':
-                    damage += effect.value;
+                case 'add_damage': {
+                    // 고정 데미지는 배율만큼 증폭
+                    damage += effect.value * chemMult;
                     break;
-                case 'mult_damage':
-                    damage = Math.floor(damage * effect.value);
+                }
+                case 'mult_damage': {
+                    // 배율 효과의 "초과분"에만 배율 적용
+                    // 예: 1.3배 + chemMult 1.5 → 1 + 0.3×1.5 = 1.45배
+                    const boosted = 1 + (effect.value - 1) * chemMult;
+                    damage = Math.floor(damage * boosted);
                     break;
-                case 'add_heal':
-                    heal += effect.value;
+                }
+                case 'add_heal': {
+                    heal += effect.value * chemMult;
                     break;
-                case 'mult_heal':
-                    heal = Math.floor(heal * effect.value);
+                }
+                case 'mult_heal': {
+                    const boosted = 1 + (effect.value - 1) * chemMult;
+                    heal = Math.floor(heal * boosted);
                     break;
+                }
                 default:
                     console.warn(`[Chemistry] 알 수 없는 효과 타입: ${effect.type}`);
                     continue;
             }
-
+        
             appliedMatches.push({
                 recipe: match.recipe,
                 before,
                 after: { damage, heal },
             });
-
-            console.log(`[Chemistry] 발동: ${match.recipe.name} (${effect.type} ${effect.value})`);
+        
+            console.log(`[Chemistry] 발동: ${match.recipe.name} (${effect.type} ${effect.value}, 배율 ${chemMult.toFixed(2)})`);
         }
-
-        return { damage, heal, appliedMatches };
+    
+        // add_* 효과가 float 누적했을 수 있으므로 최종 정수화
+        return {
+            damage: Math.floor(damage),
+            heal: Math.floor(heal),
+            appliedMatches,
+        };
     }
 }

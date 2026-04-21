@@ -11,8 +11,12 @@ class CombatManager {
         this.scene = scene;
 
         // 플레이어 상태
-        this.playerHp = CONFIG.COMBAT.PLAYER_HP;
-        this.playerMaxHp = CONFIG.COMBAT.PLAYER_HP;
+        // Phase 3-9: 식당 패시브로 최대 HP 증가
+        const bonusHp = (typeof PassiveManager !== 'undefined')
+            ? PassiveManager.getMaxHpBonus()
+            : 0;
+        this.playerMaxHp = CONFIG.COMBAT.PLAYER_HP + bonusHp;
+        this.playerHp = this.playerMaxHp;
 
         // 적군 상태
         this.enemyHp = enemyData.hp;
@@ -24,22 +28,37 @@ class CombatManager {
     }
 
     /**
-     * 블럭 1개의 효과 계산
-     */
+    * 블럭 1개의 효과 계산
+    * Phase 3-9: 패시브 건물 배율 적용
+    */
     calculateBlockEffect(block) {
         const key = block.blockType.key;
         const grade = block.grade;
         const combat = CONFIG.COMBAT;
 
+        // 패시브 배율 (PassiveManager 미로딩 시 안전값 1.0)
+        const pm = (typeof PassiveManager !== 'undefined') ? PassiveManager : null;
+        const heroMult   = pm ? pm.getHeroDamageMult()   : 1.0;
+        const equipMult  = pm ? pm.getEquipDamageMult()  : 1.0;
+        const potionMult = pm ? pm.getPotionEffectMult() : 1.0;
+
         switch (key) {
-            case 'hero':
-                return { type: 'damage', value: grade * combat.HERO_DMG_MULT };
-            case 'equip':
-                return { type: 'damage', value: grade * combat.EQUIP_DMG_MULT };
-            case 'potion_hp':
-                return { type: 'heal', value: grade * combat.HP_HEAL_MULT };
-            case 'potion_mp':
-                return { type: 'heal', value: grade * combat.MP_HEAL_MULT };
+            case 'hero': {
+                const base = grade * combat.HERO_DMG_MULT;
+                return { type: 'damage', value: Math.floor(base * heroMult) };
+            }
+            case 'equip': {
+                const base = grade * combat.EQUIP_DMG_MULT;
+                return { type: 'damage', value: Math.floor(base * equipMult) };
+            }
+            case 'potion_hp': {
+                const base = grade * combat.HP_HEAL_MULT;
+                return { type: 'heal', value: Math.floor(base * potionMult) };
+            }
+            case 'potion_mp': {
+                const base = grade * combat.MP_HEAL_MULT;
+                return { type: 'heal', value: Math.floor(base * potionMult) };
+            }
             default:
                 console.warn('[Combat] 알 수 없는 블럭 타입:', key);
                 return { type: 'none', value: 0 };

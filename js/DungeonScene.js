@@ -38,6 +38,7 @@ class DungeonScene extends Phaser.Scene {
         this.lobbyBtnBg = null;
         this.lobbyBtnText = null;
         this.lobbyBtnZone = null;
+        this._confirmDialog = null;   // ★ 추가
     }
 
     preload() {}
@@ -110,10 +111,68 @@ class DungeonScene extends Phaser.Scene {
     }
 
     _returnToLobby() {
-        // 전투 중이든 아니든 언제나 로비로 복귀 가능 (사용자 편의)
-        // 현재 진행 상태는 저장하지 않음 → 다음 진입 시 1스테이지부터
-        console.log('[DungeonScene] → LobbyScene');
+        // 확인 다이얼로그 생성 (씬 종료 전 임시 생성)
+        if (!this._confirmDialog) {
+            this._confirmDialog = new ConfirmDialog(this);
+        }
+
+        this._confirmDialog.show({
+            title: '도전 포기',
+            message: '현재 도전을 포기하시겠습니까?\n\n인벤토리의 블럭은 모두 사라집니다.\n(최종 스테이지 클리어 시에만 창고로 이관됩니다)',
+            confirmLabel: '포기',
+            cancelLabel: '계속 도전',
+            confirmColor: 0xc0392b,
+            onConfirm: () => this._doReturnToLobby(false),   // 이관 없음
+        });
+    }
+
+    /**
+     * 실제 로비 복귀 처리
+     * @param {boolean} transferInventory - true면 인벤→창고 이관
+     */
+    _doReturnToLobby(transferInventory) {
+        if (transferInventory) {
+            this._addInventoryToPending();
+        } else {
+            // 이관 없이 소멸
+            if (this.inventoryManager) this.inventoryManager.clearAll();
+        }
+
+        console.log('[DungeonScene] → LobbyScene (transfer=' + transferInventory + ')');
         this.scene.start('LobbyScene');
+    }
+
+    /**
+     * 던전 인벤 → 로비 대기 목록에 추가
+     */
+    _addInventoryToPending() {
+        if (!this.inventoryManager) return;
+        if (typeof StorageManager === 'undefined') return;
+
+        const items = (this.inventoryManager.items || []).filter(it => it !== null);
+        if (items.length === 0) return;
+
+        StorageManager.addPending(items);
+        this.inventoryManager.clearAll();
+    }
+
+    /**
+     * Phase 3-10: 던전 인벤 → 로비 창고 이관
+     */
+    _transferInventoryToStorage() {
+        if (!this.inventoryManager) return;
+        if (typeof StorageManager === 'undefined') return;
+
+        // null 제외한 유효 아이템만
+        const items = (this.inventoryManager.items || []).filter(it => it !== null);
+        if (items.length === 0) return;
+
+        const count = StorageManager.transferFromDungeon(items);
+        this.inventoryManager.clearAll();
+
+        if (count > 0) {
+            console.log(`[DungeonScene] 창고 이관: ${count}개`);
+        }
     }
 
     // ─── 스테이지 전환 ─────────────────────────────
@@ -422,19 +481,22 @@ class DungeonScene extends Phaser.Scene {
             .reduce((sum, e) => sum + e.value, 0);
 
         if (result.result === 'victory') {
-            // Phase 3-2: 클리어 시 최고 기록 갱신
+            // Phase 3-4: RewardManager를 통해 보상 + 경험치 + 최고기록 일괄 처리
             const clearedStageNum = sm.getStageNumber();
-            if (clearedStageNum > GameData.stage.highestCleared) {
-                GameData.stage.highestCleared = clearedStageNum;
-                SaveManager.requestSave();
-            }
+            const rewardResult = RewardManager.grantStageClear(clearedStageNum);
+
+            // 보상 요약 메시지 구성
+            const rewardMsg = this._formatRewardMessage(rewardResult);
+            this._showMessage(rewardMsg);
 
             if (sm.hasNextStage()) {
-                this._showMessage(`스테이지 ${sm.getStageNumber()} 클리어!`);
-                this.time.delayedCall(2000, () => this._goToNextStage());
+                this.time.delayedCall(2500, () => this._goToNextStage());
             } else {
-                this._showMessage('모든 스테이지 클리어! 로비로 이동...');
-                this.time.delayedCall(2500, () => this._returnToLobby());
+                this.time.delayedCall(3000, () => {
+                    this._showMessage('모든 스테이지 클리어! 로비로 이동...');
+                    // 최종 클리어는 확인 다이얼로그 없이 바로 복귀 + 이관
+                    this.time.delayedCall(1500, () => this._doReturnToLobby(true));
+                });
             }
         } else if (result.result === 'defeat') {
             this._showMessage('패배...');
@@ -497,6 +559,37 @@ class DungeonScene extends Phaser.Scene {
     _refreshAllUI() {
         this._refreshEnemyUI();
         this._refreshPlayerUI();
+    }
+
+    /**
+ * 보상 결과를 사용자에게 보여줄 메시지로 가공
+ */
+    _formatRewardMessage(rewardResult) {
+        const parts = [`Stage ${this.stageManager.getStageNumber()} 클리어!`];
+
+        // 자원
+        const resourceLabels = {
+            gold: '💰', wood: '🌲', stone: '🪨',
+            iron: '⛏️', food: '🍞', gem: '💎',
+        };
+        const resLines = [];
+        for (const key in rewardResult.resources) {
+            const icon = resourceLabels[key] || key;
+            resLines.push(`${icon}+${rewardResult.resources[key]}`);
+        }
+        if (resLines.length > 0) {
+            parts.push(resLines.join(' '));
+        }
+
+        // 경험치 / 레벨업
+        if (rewardResult.xpGained > 0) {
+            parts.push(`XP+${rewardResult.xpGained}`);
+        }
+        if (rewardResult.leveledUp) {
+            parts.push(`🎉 Lv.${rewardResult.oldLevel} → Lv.${rewardResult.newLevel}`);
+        }
+
+        return parts.join('\n');
     }
 
     _showMessage(text) {

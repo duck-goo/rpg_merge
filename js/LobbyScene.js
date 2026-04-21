@@ -17,6 +17,7 @@ class LobbyScene extends Phaser.Scene {
         this.topHud = null;
         this.tabBar = null;
         this.toast = null;
+        this.levelUpDialog = null;
 
         // 탭 인스턴스 맵 { tabId: instance }
         this.tabInstances = {};
@@ -28,6 +29,10 @@ class LobbyScene extends Phaser.Scene {
         const L = CONFIG.LOBBY_LAYOUT;
 
         console.log('[LobbyScene] create (tab nav)');
+
+        // ★ 추가: Phaser 씬 재사용 시 이전 상태가 남는 문제 방지
+        this.currentTabId = null;
+        this.tabInstances = {};
 
         // 영역 계산
         const hudArea = { x: 0, y: 0, width, height: L.HUD_HEIGHT };
@@ -43,6 +48,7 @@ class LobbyScene extends Phaser.Scene {
         this.topHud = new TopHud(this, hudArea, {
             onAccountTap: () => this._showToast('👤 계정 상세 (Phase 3-21에서 연결)'),
             onResourcesTap: () => this._showToast('🛒 상점 (Phase 4에서 연결)'),
+            onShopTap: () => this._showToast('🛒 상점 (Phase 4에서 연결)'),
         });
 
         // 토스트 (탭바 바로 위)
@@ -56,6 +62,19 @@ class LobbyScene extends Phaser.Scene {
 
         // 초기 탭 활성화
         this._switchTab(CONFIG.DEFAULT_TAB_ID);
+
+        // Phase 3-8: 레벨업 팝업 준비
+        this.levelUpDialog = new LevelUpDialog(this);
+
+        // 초기 탭 활성화
+        this._switchTab(CONFIG.DEFAULT_TAB_ID);
+
+        // 씬 종료 시 정리
+        this.events.once('shutdown', this._onShutdown, this);
+
+        // ★ 추가: 로비 진입 시 pendingLevelUp 있으면 팝업 표시
+        // delay: 탭이 렌더된 뒤에 팝업이 올라오도록
+        this.time.delayedCall(300, () => this._checkPendingLevelUp());
 
         // 씬 종료 시 정리
         this.events.once('shutdown', this._onShutdown, this);
@@ -82,11 +101,8 @@ class LobbyScene extends Phaser.Scene {
         });
 
         // 창고 탭 (플레이스홀더)
-        this.tabInstances['storage'] = new PlaceholderTab(this, contentArea, {
-            icon: '📦',
-            title: '창고',
-            description: '던전에서 가져온 장비·물약 블럭을\n여기서 수집하고 조각으로 분해합니다.',
-            phaseLabel: 'Phase 3-10에서 연결',
+        this.tabInstances['storage'] = new StorageTab(this, contentArea, {
+            onShowToast: (msg) => this._showToast(msg),
         });
 
         // 이벤트 탭 (플레이스홀더)
@@ -99,12 +115,28 @@ class LobbyScene extends Phaser.Scene {
     }
 
     /**
+     * Phase 3-8: pendingLevelUp 있으면 축하 팝업 표시
+     */
+    _checkPendingLevelUp() {
+        const pending = GameData.meta.pendingLevelUp;
+        if (!pending) return;
+
+        // pending 즉시 제거 (팝업 열린 후 탭 이동 등으로 재표시 방지)
+        GameData.meta.pendingLevelUp = null;
+        SaveManager.save();
+
+        if (this.levelUpDialog) {
+            this.levelUpDialog.show(pending);
+        }
+    }
+
+    /**
      * 탭 전환
      * 이전 탭.hide() → 새 탭.show() → HUD 페이지 이름 갱신
      */
     _switchTab(tabId) {
-        // 같은 탭이면 무시
-        if (tabId === this.currentTabId) return;
+        // 같은 탭이면 무시 (단, 최초 진입 시에는 반드시 show 실행)
+        if (tabId === this.currentTabId && this.currentTabId !== null) return;
 
         // 이전 탭 숨김
         if (this.currentTabId && this.tabInstances[this.currentTabId]) {
@@ -120,7 +152,7 @@ class LobbyScene extends Phaser.Scene {
         newTab.show();
         this.currentTabId = tabId;
 
-        // TabBar 강조 상태 동기화 (외부 트리거로 setActive 호출된 경우 대비)
+        // TabBar 강조 상태 동기화
         if (this.tabBar) this.tabBar.setActive(tabId);
 
         // 페이지 이름 갱신
@@ -133,8 +165,17 @@ class LobbyScene extends Phaser.Scene {
     }
 
     _onEnterDungeon() {
+        // 1. 식량 체크 및 차감
+        const result = RewardManager.consumeDungeonEntry();
+        if (!result.success) {
+            this._showToast(`⚠️ ${result.reason}`);
+            return;
+        }
+
+        // 2. 스테이지 인덱스 초기화
         GameData.stage.currentIndex = 0;
-        SaveManager.requestSave();
+        SaveManager.save();   // 즉시 저장 (씬 전환 직전)
+
         console.log('[LobbyScene] 던전 입장 → DungeonScene');
         this.scene.start('DungeonScene');
     }
@@ -146,7 +187,6 @@ class LobbyScene extends Phaser.Scene {
     _onShutdown() {
         console.log('[LobbyScene] shutdown → cleanup');
 
-        // 모든 탭 정리
         for (const tabId in this.tabInstances) {
             if (this.tabInstances[tabId]) {
                 this.tabInstances[tabId].destroy();
@@ -157,5 +197,6 @@ class LobbyScene extends Phaser.Scene {
         if (this.topHud) { this.topHud.destroy(); this.topHud = null; }
         if (this.tabBar) { this.tabBar.destroy(); this.tabBar = null; }
         if (this.toast)  { this.toast.destroy();  this.toast = null; }
+        if (this.levelUpDialog) { this.levelUpDialog.destroy(); this.levelUpDialog = null; }  // ★
     }
 }
