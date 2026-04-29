@@ -1,16 +1,18 @@
 /**
  * Block.js
- * 머지 보드 위의 개별 블럭
- * 데이터(type, grade)와 화면 표현(Container)을 함께 관리
+ * 머지 보드 위의 블럭 (Phase 3-11-A: 스페이서 지원)
+ *
+ * 일반 블럭과 스페이서 블럭은 같은 클래스를 공유하되,
+ * isSpawner 플래그로 외형/동작을 분기.
  */
 class Block extends Phaser.GameObjects.Container {
     /**
      * @param {Phaser.Scene} scene
-     * @param {number} x - 화면 x 좌표
-     * @param {number} y - 화면 y 좌표
-     * @param {number} size - 블럭 크기 (px)
+     * @param {number} x
+     * @param {number} y
+     * @param {number} size
      * @param {object} blockType - CONFIG.BLOCK.TYPES 중 하나
-     * @param {number} grade - 등급 (1~)
+     * @param {number} grade
      */
     constructor(scene, x, y, size, blockType, grade) {
         super(scene, x, y);
@@ -19,43 +21,86 @@ class Block extends Phaser.GameObjects.Container {
         this.grade = grade;
         this.blockSize = size;
 
-        // 보드 상 위치 (col, row) — BoardManager가 설정
+        // 보드 좌표
         this.boardCol = -1;
         this.boardRow = -1;
 
-        // 드래그 시작 위치 저장용
+        // 드래그 보조
         this.dragStartX = 0;
         this.dragStartY = 0;
-        // 블럭 소속: 'board' 또는 'queue'
+
+        // 위치 분류
         this.location = 'board';
-        // 인벤토리 슬롯 인덱스 (location === 'inventory'일 때만 유효)
         this.inventorySlot = -1;
+
+        // ★ 스페이서 플래그
+        this.isSpawner = !!blockType.isSpawner;
 
         this._draw();
         scene.add.existing(this);
     }
 
-    /**
-     * 블럭 외형 그리기
-     */
     _draw() {
+        if (this.isSpawner) {
+            this._drawSpawner();
+        } else {
+            this._drawNormal();
+        }
+        this.setSize(this.blockSize, this.blockSize);
+        this.setInteractive({ draggable: true });
+    }
+
+    /**
+     * 스페이서 외형: 외곽선 + 아이콘 + 이름
+     */
+    _drawSpawner() {
         const margin = CONFIG.BLOCK.MARGIN;
         const drawSize = this.blockSize - margin * 2;
         const radius = CONFIG.BLOCK.BORDER_RADIUS;
 
-        // 배경 사각형
         const bg = this.scene.add.graphics();
         bg.fillStyle(this.blockType.color, 1);
-        bg.fillRoundedRect(
-            -drawSize / 2, -drawSize / 2,
-            drawSize, drawSize,
-            radius
-        );
+        bg.fillRoundedRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize, radius);
+        // 외곽선으로 일반 블럭과 구분
+        bg.lineStyle(3, 0xffffff, 0.85);
+        bg.strokeRoundedRect(-drawSize / 2 + 1, -drawSize / 2 + 1, drawSize - 2, drawSize - 2, radius);
         this.add(bg);
 
-        // 등급 텍스트
+        // 아이콘
+        const iconText = this.scene.add.text(0, -drawSize * 0.08, this.blockType.icon || '?', {
+            fontFamily: 'Arial',
+            fontSize: `${Math.floor(drawSize * 0.42)}px`,
+            color: '#ffffff',
+            fontStyle: 'bold',
+        }).setOrigin(0.5);
+        this.add(iconText);
+
+        // 이름 (하단)
+        const nameText = this.scene.add.text(0, drawSize / 2 - 8, this.blockType.name, {
+            fontFamily: 'Arial',
+            fontSize: '8px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+        }).setOrigin(0.5);
+        this.add(nameText);
+    }
+
+    /**
+     * 일반 블럭 외형: 등급 숫자 중앙 + 타입 약자 상단
+     */
+    _drawNormal() {
+        const margin = CONFIG.BLOCK.MARGIN;
+        const drawSize = this.blockSize - margin * 2;
+        const radius = CONFIG.BLOCK.BORDER_RADIUS;
+
+        const bg = this.scene.add.graphics();
+        bg.fillStyle(this.blockType.color, 1);
+        bg.fillRoundedRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize, radius);
+        this.add(bg);
+
+        // 등급 숫자
         const gradeText = this.scene.add.text(0, 0, String(this.grade), {
-            fontFamily: 'Arial, sans-serif',
+            fontFamily: 'Arial',
             fontSize: `${Math.floor(drawSize * 0.45)}px`,
             color: '#ffffff',
             fontStyle: 'bold',
@@ -67,24 +112,20 @@ class Block extends Phaser.GameObjects.Container {
         // 타입 약자 (상단)
         const typeLabel = this.blockType.key.charAt(0).toUpperCase();
         const labelText = this.scene.add.text(0, -drawSize / 2 + 10, typeLabel, {
-            fontFamily: 'Arial, sans-serif',
+            fontFamily: 'Arial',
             fontSize: '10px',
             color: '#ffffff',
-            alpha: 0.7,
             align: 'center',
         }).setOrigin(0.5);
         this.add(labelText);
-
-        // 인터랙티브 영역 설정 (드래그용)
-        this.setSize(this.blockSize, this.blockSize);
-        this.setInteractive({ draggable: true });
     }
 
     /**
-     * 등급 변경 시 화면 갱신
+     * 등급 변경 시 화면 갱신 (일반 블럭만)
      */
     setGrade(newGrade) {
+        if (this.isSpawner) return;
         this.grade = newGrade;
-        this.gradeText.setText(String(newGrade));
+        if (this.gradeText) this.gradeText.setText(String(newGrade));
     }
 }

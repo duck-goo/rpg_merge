@@ -28,15 +28,108 @@ class BoardManager {
      */
     _initGrid() {
         const { cols, rows } = this.boardInfo;
-
         for (let row = 0; row < rows; row++) {
             this.grid[row] = [];
             for (let col = 0; col < cols; col++) {
                 this.grid[row][col] = null;
             }
         }
+        // ★ 자동 채우기 제거 — 스페이서만 배치
+        this.spawnInitialSpawners();
+    }
 
-        this.fillAllEmpty();
+    /**
+     * Phase 3-11-A: 던전 시작 시 스페이서 3종 자동 배치
+     */
+    spawnInitialSpawners() {
+        const initial = (CONFIG.BLOCK && CONFIG.BLOCK.INITIAL_SPAWNERS) || [];
+
+        for (const spec of initial) {
+            const blockType = this._findTypeByKey(spec.typeKey);
+            if (!blockType) {
+                console.warn(`[Board] 알 수 없는 스페이서 키: ${spec.typeKey}`);
+                continue;
+            }
+            if (spec.col < 0 || spec.col >= this.boardInfo.cols ||
+                spec.row < 0 || spec.row >= this.boardInfo.rows) {
+                console.warn(`[Board] 스페이서 위치 범위 밖: ${spec.col},${spec.row}`);
+                continue;
+            }
+            if (this.grid[spec.row][spec.col] !== null) {
+                console.warn(`[Board] 위치 이미 차있음: ${spec.col},${spec.row}`);
+                continue;
+            }
+
+            const { x, y } = this.boardToScreen(spec.col, spec.row);
+            const block = new Block(this.scene, x, y, this.boardInfo.cellSize, blockType, 1);
+            block.boardCol = spec.col;
+            block.boardRow = spec.row;
+            block.location = 'board';
+            this.grid[spec.row][spec.col] = block;
+        }
+
+        console.log(`[Board] 스페이서 ${initial.length}개 배치 완료`);
+    }
+
+    /**
+     * 4방향 인접 빈 칸 좌표 (없으면 null)
+     * 우선순위: 위, 아래, 왼쪽, 오른쪽
+     */
+    getAdjacentEmpty(col, row) {
+        const dirs = [
+            { dc: 0,  dr: -1 },
+            { dc: 0,  dr: 1 },
+            { dc: -1, dr: 0 },
+            { dc: 1,  dr: 0 },
+        ];
+        for (const { dc, dr } of dirs) {
+            const nc = col + dc;
+            const nr = row + dr;
+            if (nc < 0 || nc >= this.boardInfo.cols) continue;
+            if (nr < 0 || nr >= this.boardInfo.rows) continue;
+            if (this.grid[nr][nc] === null) return { col: nc, row: nr };
+        }
+        return null;
+    }
+
+    /**
+     * 지정 위치에 특정 타입의 블럭 생성 (스페이서 호출용)
+     * @returns {Block|null}
+     */
+    spawnBlockOfType(typeKey, col, row, grade = 1) {
+        const blockType = this._findTypeByKey(typeKey);
+        if (!blockType) {
+            console.warn(`[Board] 알 수 없는 타입: ${typeKey}`);
+            return null;
+        }
+        if (col < 0 || col >= this.boardInfo.cols ||
+            row < 0 || row >= this.boardInfo.rows) {
+            console.warn(`[Board] 위치 범위 밖: ${col},${row}`);
+            return null;
+        }
+        if (this.grid[row][col] !== null) {
+            console.warn(`[Board] 위치 이미 차있음: ${col},${row}`);
+            return null;
+        }
+
+        const { x, y } = this.boardToScreen(col, row);
+        const block = new Block(this.scene, x, y, this.boardInfo.cellSize, blockType, grade);
+        block.boardCol = col;
+        block.boardRow = row;
+        block.location = 'board';
+        this.grid[row][col] = block;
+        return block;
+    }
+
+    /**
+     * blockType.key로 CONFIG.BLOCK.TYPES 항목 찾기
+     */
+    _findTypeByKey(key) {
+        const types = CONFIG.BLOCK.TYPES;
+        for (const k in types) {
+            if (types[k].key === key) return types[k];
+        }
+        return null;
     }
 
     // ─── 좌표 변환 ─────────────────────────────
@@ -322,8 +415,6 @@ class BoardManager {
      */
     resetBoard() {
         const { cols, rows } = this.boardInfo;
-
-        // 기존 블럭 전부 파괴
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
                 if (this.grid[row][col] !== null) {
@@ -332,8 +423,21 @@ class BoardManager {
                 }
             }
         }
+        // Phase 3-11-A: 자동 채우기 X, 스페이서만 재배치
+        this.spawnInitialSpawners();
+    }
 
-        // 새 블럭으로 채움
-        this.fillAllEmpty();
+    canMerge(col1, row1, col2, row2) {
+        const blockA = this.grid[row1][col1];
+        const blockB = this.grid[row2][col2];
+        if (!blockA || !blockB) return false;
+        
+        // Phase 3-11-A: 스페이서는 머지 불가
+        if (blockA.isSpawner || blockB.isSpawner) return false;
+        
+        if (blockA.blockType.key !== blockB.blockType.key) return false;
+        if (blockA.grade !== blockB.grade) return false;
+        if (blockA.grade >= CONFIG.BLOCK.MAX_GRADE) return false;
+        return true;
     }
 }

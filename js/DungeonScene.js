@@ -14,7 +14,6 @@ class DungeonScene extends Phaser.Scene {
         super({ key: 'DungeonScene' });
         this.boardInfo = null;
         this.boardManager = null;
-        this.queueManager = null;
         this.combatManager = null;
         this.stageManager = null;
         this.inventoryManager = null;
@@ -27,8 +26,6 @@ class DungeonScene extends Phaser.Scene {
         this.playerHpText = null;
         this.messageText = null;
         this.stageText = null;
-        this.chemistryManager = null;
-        this.chemistryBookUI = null;
         this.retryManager = null;
         this.retryDialogUI = null;
         this.tutorialManager = null;
@@ -51,15 +48,11 @@ class DungeonScene extends Phaser.Scene {
         this.boardInfo = this._calculateBoardLayout(width, height);
 
         this._drawBoardBackground();
-        this._drawQueueSlots(width, height);
 
         this.boardManager = new BoardManager(this, this.boardInfo);
-        this.queueManager = new QueueManager(this, width, height);
         this.stageManager = new StageManager(this);
         this.inventoryManager = new InventoryManager(this);
         this.inventoryUI = new InventoryUI(this, this.inventoryManager);
-        this.chemistryManager = new ChemistryManager(this);
-        this.chemistryBookUI = new ChemistryBookUI(this);
         this.retryManager = new RetryManager(this);
         this.retryDialogUI = new RetryDialogUI(this, this.retryManager);
         this.tutorialManager = new TutorialManager(this);
@@ -198,7 +191,6 @@ class DungeonScene extends Phaser.Scene {
         this.combatManager = new CombatManager(this, stageData.enemy);
 
         this.boardManager.resetBoard();
-        this.queueManager.clearAll();
         if (this.retryManager) this.retryManager.resetForNewStage();
 
         this._refreshAllUI();
@@ -219,7 +211,6 @@ class DungeonScene extends Phaser.Scene {
 
         this.boardManager.resetBoard();
         this.inventoryManager.clearAll();
-        this.queueManager.clearAll();
         if (this.retryManager) this.retryManager.resetForNewStage();
 
         this._refreshAllUI();
@@ -310,10 +301,8 @@ class DungeonScene extends Phaser.Scene {
         const h = gameHeight * layout.BUTTON_HEIGHT;
 
         const btnDefs = [
-            { label: '발동', color: 0xc0392b, action: () => this._onActivate() },
             { label: '인벤', color: 0x233554, action: () => this._onInventoryOpen() },
-            { label: '스킬', color: 0x233554, action: null },
-            { label: '도감', color: 0x233554, action: () => this._onChemistryBookOpen() },
+            { label: '로비로', color: 0x16a085, action: () => this._returnToLobby() },
         ];
 
         const btnW = 70;
@@ -364,16 +353,6 @@ class DungeonScene extends Phaser.Scene {
         if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
         if (this.inventoryUI.isOpen) return;
         this.inventoryUI.open();
-    }
-
-    _onChemistryBookOpen() {
-        if (this.stageManager.isTransitioning) return;
-        if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
-        if (this.chemistryBookUI.isOpen) return;
-        if (this.inventoryUI && this.inventoryUI.isOpen) {
-            this.inventoryUI.close();
-        }
-        this.chemistryBookUI.open();
     }
 
     // ─── 리트라이 ─────────────────────────────
@@ -429,6 +408,9 @@ class DungeonScene extends Phaser.Scene {
     }
 
     _moveBoardBlockToInventory(block) {
+        if (block.isSpawner) {
+            return false;
+        }
         if (this.inventoryManager.isFull()) {
             this._showMessage('인벤토리가 꽉 찼습니다');
             return false;
@@ -446,78 +428,6 @@ class DungeonScene extends Phaser.Scene {
         return true;
     }
 
-    // ─── 발동 로직 ─────────────────────────────
-
-    _onActivate() {
-        const qm = this.queueManager;
-        const cm = this.combatManager;
-        const sm = this.stageManager;
-
-        if (cm.isBattleOver || sm.isTransitioning) return;
-        if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
-
-        const blocks = [];
-        for (let i = 0; i < qm.slotCount; i++) {
-            if (qm.slots[i] !== null) {
-                blocks.push(qm.slots[i]);
-            }
-        }
-
-        if (blocks.length === 0) {
-            this._showMessage('대기칸에 블럭을 배치하세요');
-            return;
-        }
-
-        const result = cm.executeTurn(blocks, this.chemistryManager);
-
-        qm.clearAll();
-        this._refreshHpBars();
-
-        const dmgTotal = result.effects
-            .filter(e => e.type === 'damage')
-            .reduce((sum, e) => sum + e.value, 0);
-        const healTotal = result.effects
-            .filter(e => e.type === 'heal')
-            .reduce((sum, e) => sum + e.value, 0);
-
-        if (result.result === 'victory') {
-            // Phase 3-4: RewardManager를 통해 보상 + 경험치 + 최고기록 일괄 처리
-            const clearedStageNum = sm.getStageNumber();
-            const rewardResult = RewardManager.grantStageClear(clearedStageNum);
-
-            // 보상 요약 메시지 구성
-            const rewardMsg = this._formatRewardMessage(rewardResult);
-            this._showMessage(rewardMsg);
-
-            if (sm.hasNextStage()) {
-                this.time.delayedCall(2500, () => this._goToNextStage());
-            } else {
-                this.time.delayedCall(3000, () => {
-                    this._showMessage('모든 스테이지 클리어! 로비로 이동...');
-                    // 최종 클리어는 확인 다이얼로그 없이 바로 복귀 + 이관
-                    this.time.delayedCall(1500, () => this._doReturnToLobby(true));
-                });
-            }
-        } else if (result.result === 'defeat') {
-            this._showMessage('패배...');
-            this.time.delayedCall(800, () => this._openRetryDialog());
-        } else {
-            const realDmg = result.totalDamage ?? dmgTotal;
-            const realHeal = result.totalHeal ?? healTotal;
-
-            let msg = '';
-            if (realDmg > 0) msg += `데미지 ${realDmg}  `;
-            if (realHeal > 0) msg += `회복 ${realHeal}  `;
-            if (result.enemyDmg > 0) msg += `적 반격 ${result.enemyDmg}`;
-
-            if (result.chemistryMatches && result.chemistryMatches.length > 0) {
-                const names = result.chemistryMatches.map(m => m.recipe.name).join(', ');
-                msg += `\n✨ ${names}`;
-            }
-
-            this._showMessage(msg);
-        }
-    }
 
     // ─── UI 갱신 ─────────────────────────────
 
@@ -604,6 +514,26 @@ class DungeonScene extends Phaser.Scene {
     // ─── 드래그 이벤트 ─────────────────────────────
 
     _setupDragEvents() {
+        // 탭 감지용 상태
+        this._tapStartX = 0;
+        this._tapStartY = 0;
+        this._tapBlock = null;
+
+        // pointerdown — 탭 시작 좌표 저장
+        this.input.on('pointerdown', (pointer, targets) => {
+            if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
+            if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
+
+            const block = (targets || []).find(t => t instanceof Block);
+            if (block) {
+                this._tapStartX = pointer.x;
+                this._tapStartY = pointer.y;
+                this._tapBlock = block;
+            } else {
+                this._tapBlock = null;
+            }
+        });
+
         this.input.on('dragstart', (pointer, block) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
             if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
@@ -636,33 +566,106 @@ class DungeonScene extends Phaser.Scene {
 
             block.setAlpha(1);
 
+            // 이동 거리로 탭 vs 드래그 판별
+            const moved = Phaser.Math.Distance.Between(
+                this._tapStartX, this._tapStartY, pointer.x, pointer.y
+            );
+            if (moved < 8 && this._tapBlock === block) {
+                block.x = block.dragStartX;
+                block.y = block.dragStartY;
+                this._handleBlockTap(block);
+                return;
+            }
+
+            // 드래그로 처리
             if (block.location === 'board') {
                 this._handleBoardBlockDrop(pointer, block);
-            } else if (block.location === 'queue') {
-                this._handleQueueBlockDrop(pointer, block);
             }
+            // location === 'inventory'는 InventoryUI 내부에서 처리됨
         });
+    }
+
+    /**
+     * 블럭 탭 처리
+     * - 스페이서: 인접 빈칸에 블럭 생성
+     * - 일반 블럭: A-2에선 무시 (A-3에서 영웅 발동)
+     */
+    _handleBlockTap(block) {
+        if (block.isSpawner) {
+            this._handleSpawnerTap(block);
+        }
+    }
+
+    /**
+     * 스페이서 탭 → 인접 빈칸에 블럭 1개 생성
+     */
+    _handleSpawnerTap(spawner) {
+        const empty = this.boardManager.getAdjacentEmpty(spawner.boardCol, spawner.boardRow);
+        if (!empty) {
+            this._showMessage(`${spawner.blockType.name}: 빈 칸 부족`);
+            return;
+        }
+
+        const produces = spawner.blockType.produces;
+        let typeKey;
+        if (Array.isArray(produces)) {
+            typeKey = produces[Math.floor(Math.random() * produces.length)];
+        } else {
+            typeKey = produces;
+        }
+
+        const newBlock = this.boardManager.spawnBlockOfType(typeKey, empty.col, empty.row, 1);
+        if (newBlock) {
+            console.log(`[Spawner] ${spawner.blockType.name} → ${newBlock.blockType.name} at (${empty.col},${empty.row})`);
+        }
+    }
+
+    /**
+     * 블럭 탭 처리 (스페이서면 생성, 일반 블럭은 일단 무시 — A-3에서 발동 추가)
+     */
+    _handleBlockTap(block) {
+        if (block.isSpawner) {
+            this._handleSpawnerTap(block);
+        } else {
+            // A-2에선 일반 블럭 탭 무시. A-3에서 영웅 발동 추가.
+        }
+    }
+
+    /**
+     * 스페이서 탭 → 인접 빈칸에 블럭 생성
+     */
+    _handleSpawnerTap(spawner) {
+        const empty = this.boardManager.getAdjacentEmpty(spawner.boardCol, spawner.boardRow);
+        if (!empty) {
+            this._showMessage(`${spawner.blockType.name}: 인접 빈칸이 없습니다`);
+            return;
+        }
+
+        // 어떤 타입을 생성할지 결정
+        const produces = spawner.blockType.produces;
+        let typeKey;
+        if (Array.isArray(produces)) {
+            typeKey = produces[Math.floor(Math.random() * produces.length)];
+        } else {
+            typeKey = produces;
+        }
+
+        const newBlock = this.boardManager.spawnBlockOfType(typeKey, empty.col, empty.row, 1);
+        if (newBlock) {
+            console.log(`[Spawner] ${spawner.blockType.name} 탭 → ${newBlock.blockType.name} 생성 at (${empty.col},${empty.row})`);
+        }
     }
 
     _handleBoardBlockDrop(pointer, block) {
         const bm = this.boardManager;
         const qm = this.queueManager;
 
-        if (qm.isInQueueArea(pointer.x, pointer.y)) {
-            const slotIndex = qm.screenToSlot(pointer.x, pointer.y);
-            if (slotIndex >= 0 && qm.slots[slotIndex] === null) {
-                const col = block.boardCol;
-                const row = block.boardRow;
-                bm.grid[row][col] = null;
-                qm.placeBlock(slotIndex, block);
-                bm.refillBoard();
+        if (this._isOverInventoryButton(pointer.x, pointer.y)) {
+            if (block.isSpawner) {
+                this._showMessage('스페이서는 인벤에 넣을 수 없습니다');
+                bm.snapToCell(block);
                 return;
             }
-            bm.snapToCell(block);
-            return;
-        }
-
-        if (this._isOverInventoryButton(pointer.x, pointer.y)) {
             if (!this._moveBoardBlockToInventory(block)) {
                 bm.snapToCell(block);
             }
@@ -684,7 +687,6 @@ class DungeonScene extends Phaser.Scene {
 
         if (bm.canMerge(block.boardCol, block.boardRow, dropPos.col, dropPos.row)) {
             bm.mergeBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
-            bm.refillBoard();
             return;
         }
 
@@ -701,35 +703,17 @@ class DungeonScene extends Phaser.Scene {
         const btnW = 70;
         const btnH = 36;
         const btnGap = 20;
-        const labelCount = 4;
+        const labelCount = 2;
         const totalW = (btnW * labelCount) + (btnGap * (labelCount - 1));
         const btnStartX = (gw - totalW) / 2;
         const btnY = y + (h - btnH) / 2;
 
-        const invBtnX = btnStartX + 1 * (btnW + btnGap);
+        const invBtnX = btnStartX + 0 * (btnW + btnGap);
 
         return (
             screenX >= invBtnX && screenX <= invBtnX + btnW &&
             screenY >= btnY && screenY <= btnY + btnH
         );
-    }
-
-    _handleQueueBlockDrop(pointer, block) {
-        const qm = this.queueManager;
-        const fromSlot = qm.findBlock(block);
-
-        if (!qm.isInQueueArea(pointer.x, pointer.y)) {
-            qm.snapToSlot(block);
-            return;
-        }
-
-        const toSlot = qm.screenToSlot(pointer.x, pointer.y);
-        if (toSlot >= 0 && toSlot !== fromSlot) {
-            qm.swapSlots(fromSlot, toSlot);
-            return;
-        }
-
-        qm.snapToSlot(block);
     }
 
     _calculateBoardLayout(gameWidth, gameHeight) {
@@ -768,30 +752,5 @@ class DungeonScene extends Phaser.Scene {
                 graphics.fillRoundedRect(x, y, cellSize, cellSize, 4);
             }
         }
-    }
-
-    _drawQueueSlots(gameWidth, gameHeight) {
-        const layout = CONFIG.LAYOUT;
-        const y = gameHeight * layout.QUEUE_Y;
-        const h = gameHeight * layout.QUEUE_HEIGHT;
-        const slotCount = CONFIG.QUEUE.SLOT_COUNT;
-        const slotSize = Math.floor(h * 0.7);
-        const slotGap = CONFIG.QUEUE.SLOT_GAP;
-        const totalW = (slotSize * slotCount) + (slotGap * (slotCount - 1));
-        const slotStartX = (gameWidth - totalW) / 2;
-        const slotY = y + (h - slotSize) / 2;
-
-        const graphics = this.add.graphics();
-        for (let i = 0; i < slotCount; i++) {
-            const sx = slotStartX + i * (slotSize + slotGap);
-            graphics.fillStyle(CONFIG.COLORS.QUEUE_SLOT, 1);
-            graphics.fillRoundedRect(sx, slotY, slotSize, slotSize, 4);
-        }
-
-        this.add.text(gameWidth / 2, y + 4, '대기칸', {
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '10px',
-            color: '#555555',
-        }).setOrigin(0.5, 0);
     }
 }

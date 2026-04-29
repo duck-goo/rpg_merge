@@ -70,7 +70,7 @@ class CombatManager {
      * @param {Block[]} blocks - 왼→오 (null 없음)
      * @param {ChemistryManager} chemistry - 케미 매니저 (옵션)
      */
-    executeTurn(blocks, chemistry = null) {
+    executeTurn(blocks) {
         if (this.isBattleOver) {
             return { effects: [], enemyDmg: 0, result: 'already_over', chemistryMatches: [] };
         }
@@ -95,20 +95,11 @@ class CombatManager {
             }
         }
 
-        // 2단계: 케미 매칭 및 효과 적용
-        let chemistryMatches = [];
-        if (chemistry) {
-            const matches = chemistry.detectMatches(blocks);
-            const result = chemistry.applyEffects(matches, totalDamage, totalHeal);
-            totalDamage = result.damage;
-            totalHeal = result.heal;
-            chemistryMatches = result.appliedMatches;
-        }
-
-        // 3단계: 적군 데미지
+        
+        // 2단계: 적군 데미지
         this.enemyHp = Math.max(0, this.enemyHp - totalDamage);
 
-        // 4단계: 플레이어 회복
+        // 3단계: 플레이어 회복
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + totalHeal);
 
         // 적군 처치 확인
@@ -117,7 +108,7 @@ class CombatManager {
             return { effects, enemyDmg: 0, result: 'victory', chemistryMatches, totalDamage, totalHeal };
         }
 
-        // 5단계: 적군 반격
+        // 4단계: 적군 반격
         const enemyDmg = this.enemyAttack;
         this.playerHp = Math.max(0, this.playerHp - enemyDmg);
 

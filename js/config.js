@@ -16,12 +16,6 @@ const CONFIG = {
         PADDING: 10,      // 보드 좌우 여백 (px)
     },
 
-    // 대기칸 설정
-    QUEUE: {
-        SLOT_COUNT: 3,     // 초기 슬롯 수
-        SLOT_GAP: 8,       // 슬롯 간 간격
-    },
-
     // 인벤토리 설정
     INVENTORY: {
         INITIAL_SLOTS: 20,    // 초기 칸수
@@ -35,10 +29,6 @@ const CONFIG = {
         // 적군 영역: 0% ~ 15%
         ENEMY_Y: 0,
         ENEMY_HEIGHT: 0.15,
-
-        // 대기칸 영역: 15% ~ 23%
-        QUEUE_Y: 0.15,
-        QUEUE_HEIGHT: 0.08,
 
         // 보드 영역: 23% ~ 83%
         BOARD_Y: 0.23,
@@ -55,8 +45,6 @@ const CONFIG = {
         CELL_EMPTY: 0x0f3460,     // 빈 칸
         CELL_BORDER: 0x1a1a2e,    // 칸 테두리 (배경과 동일 = 간격 효과)
         ENEMY_AREA: 0x1a1a2e,     // 적군 영역 (현재 배경색)
-        QUEUE_AREA: 0x1a1a2e,     // 대기칸 영역
-        QUEUE_SLOT: 0x233554,     // 대기칸 슬롯
         BUTTON_AREA: 0x1a1a2e,    // 버튼 영역
         // 인벤토리
         INV_OVERLAY: 0x000000,     // 반투명 배경 (알파로 투명도 조절)
@@ -68,15 +56,52 @@ const CONFIG = {
     // 블럭 설정
     BLOCK: {
         TYPES: {
-            HERO:      { key: 'hero',      name: '영웅', color: 0xe74c3c },
-            EQUIP:     { key: 'equip',     name: '장비', color: 0x3498db },
-            POTION_HP: { key: 'potion_hp', name: 'HP',   color: 0x2ecc71 },
-            POTION_MP: { key: 'potion_mp', name: 'MP',   color: 0x9b59b6 },
+            // ─── 기존 ─── (변경 없음)
+            HERO:      { key: 'hero',      name: '영웅', color: 0xe74c3c, category: 'hero' },   // 모험가용
+            EQUIP:     { key: 'equip',     name: '장비', color: 0x3498db, category: 'equip' },   // (구) 일반 장비, B에서 5종으로 분화
+            POTION_HP: { key: 'potion_hp', name: 'HP',   color: 0x2ecc71, category: 'potion' },
+            POTION_MP: { key: 'potion_mp', name: 'MP',   color: 0x9b59b6, category: 'potion' },
+
+            // ─── A-2 신규 — 스페이서 3종 ───
+            SPAWNER_GUILD: {
+                key: 'spawner_guild',
+                name: '길드',
+                color: 0xd4a574,           // 황금색 톤
+                category: 'spawner',
+                isSpawner: true,
+                produces: 'hero',          // 단일 키 = 고정 생성
+                icon: '⚔',
+            },
+            SPAWNER_TOOLSHOP: {
+                key: 'spawner_toolshop',
+                name: '도구상점',
+                color: 0x52b788,           // 연두
+                category: 'spawner',
+                isSpawner: true,
+                produces: ['potion_hp', 'potion_mp'],   // 배열 = 랜덤
+                icon: '⚗',
+            },
+            SPAWNER_SUPPLY: {
+                key: 'spawner_supply',
+                name: '보급고',
+                color: 0xb19cd9,           // 라일락
+                category: 'spawner',
+                isSpawner: true,
+                produces: ['equip'],       // A-2: equip 1종만. B에서 5종으로 분화
+                icon: '⚒',
+            },
         },
         MAX_GRADE: 3,       // 현재 생성 가능한 최대 등급
         INIT_GRADE: 1,      // 초기 생성 등급
         BORDER_RADIUS: 6,   // 블럭 둥근 모서리
         MARGIN: 3,          // 셀 내부 여백
+
+        // ★ 신규 — 스페이서 초기 배치 위치
+        INITIAL_SPAWNERS: [
+            { typeKey: 'spawner_guild',    col: 1, row: 3 },
+            { typeKey: 'spawner_toolshop', col: 3, row: 3 },
+            { typeKey: 'spawner_supply',   col: 5, row: 3 },
+        ],
     },
 
     // 전투 설정
@@ -96,68 +121,8 @@ const CONFIG = {
     },
 
     // 튜토리얼 (스테이지별 안내 문구)
-    TUTORIAL: {
-        1: {
-            title: '환영합니다!',
-            body:
-                '같은 종류+등급 블럭 2개를 맞대면\n' +
-                '상위 블럭으로 합쳐집니다.\n\n' +
-                '블럭을 대기칸에 올리고 [발동]을\n' +
-                '누르면 전투가 시작됩니다.',
-        },
-        2: {
-            title: '인벤토리',
-            body:
-                '하단 [인벤] 버튼으로\n' +
-                '블럭을 인벤토리에 보관할 수 있습니다.\n\n' +
-                '보드 블럭을 [인벤] 버튼 위로\n' +
-                '드래그하면 저장됩니다.\n\n' +
-                '※ 패배 시 인벤 블럭은 사라집니다.',
-        },
-        3: {
-            title: '케미 시스템',
-            body:
-                '대기칸에 특정 블럭을 나란히 두면\n' +
-                '케미가 자동 발동됩니다.\n\n' +
-                '예) 영웅+영웅 → 데미지 1.3배\n\n' +
-                '하단 [도감] 버튼에서\n' +
-                '모든 케미 조합을 확인하세요.',
-        },
+    TUTORIAL: {       
     },
-
-    // 케미 조합 정의 (MVP용 샘플)
-    // 조합 조건: blocks 배열 = [블럭키, ...] 순서대로 인접 배치 필요
-    // 효과 타입: 'add_damage' | 'mult_damage' | 'add_heal' | 'mult_heal'
-    CHEMISTRY: [
-        {
-            id: 'twin_heroes',
-            name: '쌍둥이 영웅',
-            description: '영웅 둘이 나란히',
-            blocks: ['hero', 'hero'],
-            effect: { type: 'mult_damage', value: 1.3 },  // 데미지 1.3배
-        },
-        {
-            id: 'armed_hero',
-            name: '무장한 영웅',
-            description: '영웅 + 장비 조합',
-            blocks: ['hero', 'equip'],
-            effect: { type: 'add_damage', value: 15 },    // +15 고정 데미지
-        },
-        {
-            id: 'double_potion',
-            name: '이중 조제',
-            description: 'HP 물약 둘',
-            blocks: ['potion_hp', 'potion_hp'],
-            effect: { type: 'mult_heal', value: 2.0 },    // 회복 2배
-        },
-        {
-            id: 'balanced_potion',
-            name: '균형의 조제',
-            description: 'HP와 MP의 조화',
-            blocks: ['potion_hp', 'potion_mp'],
-            effect: { type: 'add_heal', value: 20 },      // +20 고정 회복
-        },
-    ],
 
     // 스테이지 데이터
     STAGES: [
