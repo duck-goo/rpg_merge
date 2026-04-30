@@ -56,38 +56,69 @@ const CONFIG = {
     // 블럭 설정
     BLOCK: {
         TYPES: {
-            // ─── 기존 ─── (변경 없음)
-            HERO:      { key: 'hero',      name: '영웅', color: 0xe74c3c, category: 'hero' },   // 모험가용
-            EQUIP:     { key: 'equip',     name: '장비', color: 0x3498db, category: 'equip' },   // (구) 일반 장비, B에서 5종으로 분화
-            POTION_HP: { key: 'potion_hp', name: 'HP',   color: 0x2ecc71, category: 'potion' },
-            POTION_MP: { key: 'potion_mp', name: 'MP',   color: 0x9b59b6, category: 'potion' },
-
-            // ─── A-2 신규 — 스페이서 3종 ───
+            // ─── 영웅 (16종) ───
+            // 0차
+            HERO_ADVENTURER: { key: 'hero_adventurer', name: '모험가', short: '모', color: 0x95a5a6, category: 'hero', tier: 0, line: 'common' },
+                
+            // 1차 (5종)
+            HERO_WARRIOR: { key: 'hero_warrior', name: '워리어', short: '워', color: 0xe74c3c, category: 'hero', tier: 1, line: 'warrior' },
+            HERO_ARCHER:  { key: 'hero_archer',  name: '보우맨', short: '보', color: 0xe67e22, category: 'hero', tier: 1, line: 'archer' },
+            HERO_MAGE:    { key: 'hero_mage',    name: '메이지', short: '메', color: 0x3498db, category: 'hero', tier: 1, line: 'mage' },
+            HERO_CLERIC:  { key: 'hero_cleric',  name: '클레릭', short: '클', color: 0xf1c40f, category: 'hero', tier: 1, line: 'cleric' },
+            HERO_THIEF:   { key: 'hero_thief',   name: '도적',   short: '도', color: 0x8e44ad, category: 'hero', tier: 1, line: 'thief' },
+                
+            // 2차 (10종) — 1차에서 분기
+            HERO_SWORDSMAN: { key: 'hero_swordsman', name: '소드맨',     short: '소', color: 0xc0392b, category: 'hero', tier: 2, line: 'warrior' },
+            HERO_RIDER:     { key: 'hero_rider',     name: '라이더',     short: '라', color: 0xa93226, category: 'hero', tier: 2, line: 'warrior' },
+            HERO_ARCHER_T2: { key: 'hero_archer_t2', name: '아처',       short: '아', color: 0xd35400, category: 'hero', tier: 2, line: 'archer' },
+            HERO_STRIDER:   { key: 'hero_strider',   name: '스트라이더', short: '스', color: 0xba4a00, category: 'hero', tier: 2, line: 'archer' },
+            HERO_WIZARD:    { key: 'hero_wizard',    name: '위자드',     short: '위', color: 0x2980b9, category: 'hero', tier: 2, line: 'mage' },
+            HERO_SORCERER:  { key: 'hero_sorcerer',  name: '소서러',     short: '서', color: 0x21618c, category: 'hero', tier: 2, line: 'mage' },
+            HERO_PRIEST:    { key: 'hero_priest',    name: '프리스트',   short: '프', color: 0xd4ac0d, category: 'hero', tier: 2, line: 'cleric' },
+            HERO_PALMER:    { key: 'hero_palmer',    name: '팔머',       short: '팔', color: 0xb7950b, category: 'hero', tier: 2, line: 'cleric' },
+            HERO_ROGUE:     { key: 'hero_rogue',     name: '로그',       short: '로', color: 0x7d3c98, category: 'hero', tier: 2, line: 'thief' },
+            HERO_BANDIT:    { key: 'hero_bandit',    name: '밴디트',     short: '밴', color: 0x6c3483, category: 'hero', tier: 2, line: 'thief' },
+                
+            // ─── 장비 1차 (5종) — 보급고에서 랜덤 ───
+            EQ_SHORT_SWORD: { key: 'eq_short_sword', name: '숏소드',     short: '검', color: 0x5dade2, category: 'equip', tier: 1, line: 'sword' },
+            EQ_SHORT_BOW:   { key: 'eq_short_bow',   name: '숏보우',     short: '활', color: 0x48c9b0, category: 'equip', tier: 1, line: 'bow' },
+            EQ_WOOD_STAFF:  { key: 'eq_wood_staff',  name: '우드스테프', short: '봉', color: 0x5499c7, category: 'equip', tier: 1, line: 'staff' },
+            EQ_CROSS:       { key: 'eq_cross',       name: '십자가',     short: '십', color: 0xf7dc6f, category: 'equip', tier: 1, line: 'holy' },
+            EQ_KNIFE:       { key: 'eq_knife',       name: '나이프',     short: '단', color: 0xbb8fce, category: 'equip', tier: 1, line: 'dagger' },
+                
+            // ─── 장비 2차 (B-2에서 추가됨, 일단 정의만) ───
+            EQ_LONG_SWORD: { key: 'eq_long_sword', name: '롱소드',   short: '검', color: 0x2e86c1, category: 'equip', tier: 2, line: 'sword' },
+            EQ_LONG_BOW:   { key: 'eq_long_bow',   name: '롱보우',   short: '활', color: 0x16a085, category: 'equip', tier: 2, line: 'bow' },
+            EQ_DUAL_SWORD: { key: 'eq_dual_sword', name: '듀얼소드', short: '쌍', color: 0xe67e22, category: 'equip', tier: 2, line: 'dual' },
+            EQ_SPEAR:      { key: 'eq_spear',      name: '스피어',   short: '창', color: 0x922b21, category: 'equip', tier: 2, line: 'spear' },
+            EQ_STAFF:      { key: 'eq_staff',      name: '스태프',   short: '봉', color: 0x1b4f72, category: 'equip', tier: 2, line: 'staff' },
+            EQ_ORB:        { key: 'eq_orb',        name: '수정구',   short: '구', color: 0x6c3483, category: 'equip', tier: 2, line: 'orb' },
+            EQ_CODEX:      { key: 'eq_codex',      name: '초급법전', short: '책', color: 0xd4ac0d, category: 'equip', tier: 2, line: 'holy' },
+            EQ_ROSARY:     { key: 'eq_rosary',     name: '묵주',     short: '주', color: 0xb9770e, category: 'equip', tier: 2, line: 'rosary' },
+            EQ_DAGGER:     { key: 'eq_dagger',     name: '대거',     short: '단', color: 0x76448a, category: 'equip', tier: 2, line: 'dagger' },
+            EQ_NEEDLE:     { key: 'eq_needle',     name: '니들',     short: '침', color: 0x884ea0, category: 'equip', tier: 2, line: 'needle' },
+                
+            // ─── 물약 ───
+            POTION_HP: { key: 'potion_hp', name: 'HP물약', short: 'H', color: 0x2ecc71, category: 'potion', tier: 1, line: 'hp' },
+            POTION_MP: { key: 'potion_mp', name: 'MP물약', short: 'M', color: 0x9b59b6, category: 'potion', tier: 1, line: 'mp' },
+                
+            // ─── 스페이서 ───
             SPAWNER_GUILD: {
-                key: 'spawner_guild',
-                name: '길드',
-                color: 0xd4a574,           // 황금색 톤
-                category: 'spawner',
-                isSpawner: true,
-                produces: 'hero',          // 단일 키 = 고정 생성
+                key: 'spawner_guild', name: '길드', short: '길', color: 0xd4a574,
+                category: 'spawner', isSpawner: true,
+                produces: 'hero_adventurer',
                 icon: '⚔',
             },
             SPAWNER_TOOLSHOP: {
-                key: 'spawner_toolshop',
-                name: '도구상점',
-                color: 0x52b788,           // 연두
-                category: 'spawner',
-                isSpawner: true,
-                produces: ['potion_hp', 'potion_mp'],   // 배열 = 랜덤
+                key: 'spawner_toolshop', name: '도구상점', short: '도', color: 0x52b788,
+                category: 'spawner', isSpawner: true,
+                produces: ['potion_hp', 'potion_mp'],
                 icon: '⚗',
             },
             SPAWNER_SUPPLY: {
-                key: 'spawner_supply',
-                name: '보급고',
-                color: 0xb19cd9,           // 라일락
-                category: 'spawner',
-                isSpawner: true,
-                produces: ['equip'],       // A-2: equip 1종만. B에서 5종으로 분화
+                key: 'spawner_supply', name: '보급고', short: '보', color: 0xb19cd9,
+                category: 'spawner', isSpawner: true,
+                produces: ['eq_short_sword', 'eq_short_bow', 'eq_wood_staff', 'eq_cross', 'eq_knife'],
                 icon: '⚒',
             },
         },

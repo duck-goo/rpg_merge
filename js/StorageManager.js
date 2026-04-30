@@ -22,8 +22,7 @@ const StorageManager = {
     BLOCK_TO_FRAGMENT: {
         hero:      'hero',
         equip:     'equip',
-        potion_hp: 'potion',
-        potion_mp: 'potion',
+        potion: 'potion',
     },
 
     // ─── 이관 ────────────────────
@@ -196,7 +195,8 @@ const StorageManager = {
             return { success: false, reason: '해당 블럭이 없습니다' };
         }
 
-        const fragmentKey = this.BLOCK_TO_FRAGMENT[blockTypeKey];
+        const category = this._getCategory(blockTypeKey);
+        const fragmentKey = this.CATEGORY_TO_FRAGMENT[category];
         if (!fragmentKey) {
             return { success: false, reason: '분해할 수 없는 블럭' };
         }
@@ -241,12 +241,11 @@ const StorageManager = {
      * 블럭 key → 카테고리
      * hero → 'hero'
      * equip → 'equip'
-     * potion_hp/potion_mp → 'potion'
+     * potion → 'potion'
      */
     _getCategory(blockTypeKey) {
-        if (blockTypeKey === 'hero') return 'hero';
-        if (blockTypeKey === 'equip') return 'equip';
-        if (blockTypeKey === 'potion_hp' || blockTypeKey === 'potion_mp') return 'potion';
-        return 'unknown';
-    },
+        const blockType = this._findBlockType(blockTypeKey);
+        if (!blockType) return 'unknown';
+        return blockType.category;   // 'hero' | 'equip' | 'potion' | 'spawner'
+    }
 };

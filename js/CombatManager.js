@@ -32,37 +32,36 @@ class CombatManager {
     * Phase 3-9: 패시브 건물 배율 적용
     */
     calculateBlockEffect(block) {
-        const key = block.blockType.key;
+        const cat = block.blockType.category;
         const grade = block.grade;
         const combat = CONFIG.COMBAT;
 
-        // 패시브 배율 (PassiveManager 미로딩 시 안전값 1.0)
+        // 패시브 배율
         const pm = (typeof PassiveManager !== 'undefined') ? PassiveManager : null;
-        const heroMult   = pm ? pm.getHeroDamageMult()   : 1.0;
-        const equipMult  = pm ? pm.getEquipDamageMult()  : 1.0;
+        const heroMult = pm ? pm.getHeroDamageMult() : 1.0;
+        const equipMult = pm ? pm.getEquipDamageMult() : 1.0;
         const potionMult = pm ? pm.getPotionEffectMult() : 1.0;
 
-        switch (key) {
-            case 'hero': {
-                const base = grade * combat.HERO_DMG_MULT;
-                return { type: 'damage', value: Math.floor(base * heroMult) };
-            }
-            case 'equip': {
-                const base = grade * combat.EQUIP_DMG_MULT;
-                return { type: 'damage', value: Math.floor(base * equipMult) };
-            }
-            case 'potion_hp': {
-                const base = grade * combat.HP_HEAL_MULT;
-                return { type: 'heal', value: Math.floor(base * potionMult) };
-            }
-            case 'potion_mp': {
-                const base = grade * combat.MP_HEAL_MULT;
-                return { type: 'heal', value: Math.floor(base * potionMult) };
-            }
-            default:
-                console.warn('[Combat] 알 수 없는 블럭 타입:', key);
-                return { type: 'none', value: 0 };
+        if (cat === 'hero') {
+            const base = grade * combat.HERO_DMG_MULT;
+            return { type: 'damage', value: Math.floor(base * heroMult) };
         }
+        if (cat === 'equip') {
+            // B-3에서 직업별 효과로 재설계 예정. 일단 기본값.
+            const base = grade * combat.EQUIP_DMG_MULT;
+            return { type: 'damage', value: Math.floor(base * equipMult) };
+        }
+        if (block.blockType.key === 'potion_hp') {
+            const base = grade * combat.HP_HEAL_MULT;
+            return { type: 'heal', value: Math.floor(base * potionMult) };
+        }
+        if (block.blockType.key === 'potion_mp') {
+            const base = grade * combat.MP_HEAL_MULT;
+            return { type: 'heal', value: Math.floor(base * potionMult) };
+        }
+
+        console.warn('[Combat] 알 수 없는 블럭 카테고리/키:', cat, block.blockType.key);
+        return { type: 'none', value: 0 };
     }
 
     /**
@@ -73,10 +72,10 @@ class CombatManager {
     executeBlockEffect(block) {
         if (this.isBattleOver) return null;
         if (!block) return null;
-    
+
         const effect = this.calculateBlockEffect(block);
         let result = { type: effect.type, value: effect.value, victory: false };
-    
+
         if (effect.type === 'damage') {
             this.enemyHp = Math.max(0, this.enemyHp - effect.value);
             console.log(`[Combat] ${block.blockType.name} Lv.${block.grade} → 데미지 ${effect.value} (적HP ${this.enemyHp}/${this.enemyMaxHp})`);
@@ -91,10 +90,10 @@ class CombatManager {
             result.value = actual;
             console.log(`[Combat] ${block.blockType.name} Lv.${block.grade} → 회복 +${actual} (내HP ${this.playerHp}/${this.playerMaxHp})`);
         }
-    
+
         return result;
     }
-    
+
     /**
      * Phase 3-11-A: 적 턴 (TurnManager에서 호출)
      */

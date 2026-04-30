@@ -191,7 +191,7 @@ class BlockDetailUI {
         const canDismantle = count > 0 && fragmentKey && yield_ > 0;
 
         // 영웅 블럭은 Phase 3-12에서 연결 예정 → 분해 불가
-        const isHero = this.currentType.key === 'hero';
+        const isHero = this.currentType.category === 'hero';
 
         const bg = this.scene.add.graphics();
         const color = (isHero || !canDismantle) ? 0x555555 : 0xe67e22;
@@ -248,16 +248,16 @@ class BlockDetailUI {
     }
 
     _getDescription() {
-        const key = this.currentType.key;
-        switch (key) {
+        const cat = this.currentType.category;
+        switch (cat) {
             case 'hero':
-                return '영웅 블럭입니다. 분해 시 영웅 조각을 획득하여 영웅 소환에 사용할 수 있습니다. (Phase 3-12 예정)';
+                return '영웅 블럭입니다. 분해 시 영웅 조각을 획득합니다. (Phase 3-12 예정)';
             case 'equip':
-                return '장비 블럭입니다. 영웅 승급 분기에 사용되며, 분해 시 장비 조각을 획득하여 장비 제작에 사용할 수 있습니다.';
-            case 'potion_hp':
-                return 'HP 물약 블럭입니다. 분해 시 물약 조각을 획득합니다.';
-            case 'potion_mp':
-                return 'MP 물약 블럭입니다. 분해 시 물약 조각을 획득합니다.';
+                return '장비 블럭입니다. 영웅 진화 재료로 사용되며, 분해 시 장비 조각을 획득합니다.';
+            case 'potion':
+                if (this.currentType.key === 'potion_hp') return 'HP 물약 블럭입니다. 분해 시 물약 조각을 획득합니다.';
+                if (this.currentType.key === 'potion_mp') return 'MP 물약 블럭입니다. 분해 시 물약 조각을 획득합니다.';
+                return '물약 블럭입니다.';
             default:
                 return '(설명 없음)';
         }

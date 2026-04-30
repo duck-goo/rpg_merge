@@ -621,7 +621,7 @@ class DungeonScene extends Phaser.Scene {
     _setupDragEvents() {
         // 블럭 탭 콜백 등록 (BoardManager가 호출)
         this.boardManager.onBlockTap = (block) => this._handleBlockTap(block);
-        
+
         this.input.on('dragstart', (pointer, block) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
             if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
@@ -631,14 +631,14 @@ class DungeonScene extends Phaser.Scene {
             this.children.bringToTop(block);
             block.setAlpha(0.8);
         });
-    
+
         this.input.on('drag', (pointer, block, dragX, dragY) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
             if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
             block.x = dragX;
             block.y = dragY;
         });
-    
+
         this.input.on('dragend', (pointer, block) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) {
                 block.setAlpha(1);
@@ -652,9 +652,9 @@ class DungeonScene extends Phaser.Scene {
                 block.y = block.dragStartY;
                 return;
             }
-        
+
             block.setAlpha(1);
-        
+
             // Phase 3-11-A: 탭 분기 제거. 탭은 BoardManager._attachTapListener가 처리.
             // dragend는 항상 "드래그가 발생한 경우"만.
             if (block.location === 'board') {
@@ -750,49 +750,12 @@ class DungeonScene extends Phaser.Scene {
         }
     }
 
-    /**
-     * 블럭 탭 처리 (스페이서면 생성, 일반 블럭은 일단 무시 — A-3에서 발동 추가)
-     */
-    _handleBlockTap(block) {
-        if (block.isSpawner) {
-            this._handleSpawnerTap(block);
-        } else {
-            // A-2에선 일반 블럭 탭 무시. A-3에서 영웅 발동 추가.
-        }
-    }
-
-    /**
-     * 스페이서 탭 → 인접 빈칸에 블럭 생성
-     */
-    _handleSpawnerTap(spawner) {
-        const empty = this.boardManager.getAdjacentEmpty(spawner.boardCol, spawner.boardRow);
-        if (!empty) {
-            this._showMessage(`${spawner.blockType.name}: 인접 빈칸이 없습니다`);
-            return;
-        }
-
-        // 어떤 타입을 생성할지 결정
-        const produces = spawner.blockType.produces;
-        let typeKey;
-        if (Array.isArray(produces)) {
-            typeKey = produces[Math.floor(Math.random() * produces.length)];
-        } else {
-            typeKey = produces;
-        }
-
-        const newBlock = this.boardManager.spawnBlockOfType(typeKey, empty.col, empty.row, 1);
-        if (newBlock) {
-            console.log(`[Spawner] ${spawner.blockType.name} 탭 → ${newBlock.blockType.name} 생성 at (${empty.col},${empty.row})`);
-        }
-    }
-
     _handleBoardBlockDrop(pointer, block) {
         if (TurnManager.isEnemyTurnInProgress) {
             this.boardManager.snapToCell(block);
             return;
         }
         const bm = this.boardManager;
-        const qm = this.queueManager;
 
         if (this._isOverInventoryButton(pointer.x, pointer.y)) {
             if (block.isSpawner) {

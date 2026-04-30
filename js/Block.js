@@ -110,12 +110,14 @@ class Block extends Phaser.GameObjects.Container {
         this.gradeText = gradeText;
 
         // 타입 약자 (상단)
-        const typeLabel = this.blockType.key.charAt(0).toUpperCase();
+        // 타입 약자 (상단) — short 필드 우선, 없으면 key 첫 글자
+        const typeLabel = this.blockType.short || this.blockType.key.charAt(0).toUpperCase();
         const labelText = this.scene.add.text(0, -drawSize / 2 + 10, typeLabel, {
             fontFamily: 'Arial',
-            fontSize: '10px',
+            fontSize: '11px',
             color: '#ffffff',
             align: 'center',
+            fontStyle: 'bold',
         }).setOrigin(0.5);
         this.add(labelText);
     }
