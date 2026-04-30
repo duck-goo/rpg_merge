@@ -36,6 +36,15 @@ class DungeonScene extends Phaser.Scene {
         this.lobbyBtnText = null;
         this.lobbyBtnZone = null;
         this._confirmDialog = null;   // ★ 추가
+
+        // Phase 3-11-A: 턴 UI
+        this.actionText = null;
+        this.endTurnBtn = null;
+        this.endTurnBtnText = null;
+        this.endTurnBtnZone = null;
+        this._boundOnTurnChanged = null;
+        this._boundOnEnemyAttack = null;
+        this._boundOnDefeat = null;
     }
 
     preload() {}
@@ -69,8 +78,98 @@ class DungeonScene extends Phaser.Scene {
 
         this._setupDragEvents();
 
+        // Phase 3-11-A: 턴 UI 생성
+        this._createTurnUI(width, height);
+
+        // 턴/전투 이벤트 구독
+        this._boundOnTurnChanged = () => this._refreshTurnUI();
+        EventBus.on('turn:changed', this._boundOnTurnChanged);
+
+        this._boundOnEnemyAttack = ({ damage }) => {
+            this._refreshHpBars();
+            this._showMessage(`적 공격: ${damage} 데미지`);
+        };
+        EventBus.on('combat:enemyAttack', this._boundOnEnemyAttack);
+
+        this._boundOnDefeat = () => {
+            this._refreshHpBars();
+            this._showMessage('패배...');
+            this.time.delayedCall(800, () => this._openRetryDialog());
+        };
+        EventBus.on('combat:defeat', this._boundOnDefeat);
+
+        this.events.once('shutdown', () => {
+            if (this._boundOnTurnChanged) EventBus.off('turn:changed', this._boundOnTurnChanged);
+            if (this._boundOnEnemyAttack) EventBus.off('combat:enemyAttack', this._boundOnEnemyAttack);
+            if (this._boundOnDefeat) EventBus.off('combat:defeat', this._boundOnDefeat);
+        });
+
+        // 턴 시스템 초기화
+        TurnManager.init(this);
+
         console.log('[DungeonScene] Phase 3-2: 씬 분리 완료');
         this.time.delayedCall(300, () => this._tryShowTutorial());
+
+
+    }
+
+    _createTurnUI(gameWidth, gameHeight) {
+        const layout = CONFIG.LAYOUT;
+        const boardBottom = gameHeight * (layout.BOARD_Y + layout.BOARD_HEIGHT);
+        const buttonTop = gameHeight * layout.BUTTON_Y;
+        const centerY = (boardBottom + buttonTop) / 2;
+
+        // 행동 카운터 (좌측)
+        this.actionText = this.add.text(
+            14, centerY,
+            '', {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#f1c40f',
+                fontStyle: 'bold',
+            }
+        ).setOrigin(0, 0.5);
+
+        // [턴 종료] 버튼 (우측)
+        const btnW = 84;
+        const btnH = 28;
+        const btnX = gameWidth - btnW - 12;
+        const btnY = centerY - btnH / 2;
+
+        this.endTurnBtn = this.add.graphics();
+        this.endTurnBtn.fillStyle(0x8e44ad, 1);
+        this.endTurnBtn.fillRoundedRect(btnX, btnY, btnW, btnH, 5);
+
+        this.endTurnBtnText = this.add.text(
+            btnX + btnW / 2, btnY + btnH / 2,
+            '턴 종료', {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#ffffff',
+                fontStyle: 'bold',
+            }
+        ).setOrigin(0.5);
+
+        this.endTurnBtnZone = this.add.zone(btnX + btnW / 2, btnY + btnH / 2, btnW, btnH);
+        this.endTurnBtnZone.setInteractive({ useHandCursor: true });
+        this.endTurnBtnZone.on('pointerdown', () => this._onEndTurnTap());
+
+        this._refreshTurnUI();
+    }
+
+    _refreshTurnUI() {
+        if (!this.actionText) return;
+        const d = GameData.dungeon || { actionsRemaining: 0, actionsPerTurn: 3, turnNumber: 1 };
+        this.actionText.setText(`⚡ ${d.actionsRemaining}/${d.actionsPerTurn}  Turn ${d.turnNumber}`);
+    }
+
+    _onEndTurnTap() {
+        if (TurnManager.isEnemyTurnInProgress) return;
+        if (this.combatManager.isBattleOver) return;
+
+        GameData.dungeon.actionsRemaining = 0;
+        EventBus.emit('turn:changed');
+        TurnManager.endTurn();
     }
 
     update(time, delta) {}
@@ -198,6 +297,8 @@ class DungeonScene extends Phaser.Scene {
 
         sm.isTransitioning = false;
         this.time.delayedCall(600, () => this._tryShowTutorial());
+
+        TurnManager.init(this);
     }
 
     _restartStage() {
@@ -218,6 +319,8 @@ class DungeonScene extends Phaser.Scene {
 
         sm.isTransitioning = false;
         this.time.delayedCall(600, () => this._tryShowTutorial());
+
+        TurnManager.init(this);
     }
 
     // ─── 전투 UI 생성 ─────────────────────────────
@@ -388,6 +491,8 @@ class DungeonScene extends Phaser.Scene {
         this._refreshAllUI();
         this._showMessage('HP 회복! 전투 재개');
         console.log('[Retry] 광고 리트라이 성공 → 전투 재개');
+
+        TurnManager.init(this);
     }
 
     // ─── 튜토리얼 ─────────────────────────────
@@ -424,7 +529,7 @@ class DungeonScene extends Phaser.Scene {
         this.boardManager.grid[row][col] = null;
         block.destroy();
 
-        this.boardManager.refillBoard();
+        // Phase 3-11-A: 자동 리필 비활성. 빈 칸은 스페이서 탭으로 채움.
         return true;
     }
 
@@ -469,8 +574,8 @@ class DungeonScene extends Phaser.Scene {
     _refreshAllUI() {
         this._refreshEnemyUI();
         this._refreshPlayerUI();
+        this._refreshTurnUI();
     }
-
     /**
  * 보상 결과를 사용자에게 보여줄 메시지로 가공
  */
@@ -514,42 +619,26 @@ class DungeonScene extends Phaser.Scene {
     // ─── 드래그 이벤트 ─────────────────────────────
 
     _setupDragEvents() {
-        // 탭 감지용 상태
-        this._tapStartX = 0;
-        this._tapStartY = 0;
-        this._tapBlock = null;
-
-        // pointerdown — 탭 시작 좌표 저장
-        this.input.on('pointerdown', (pointer, targets) => {
-            if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
-            if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
-
-            const block = (targets || []).find(t => t instanceof Block);
-            if (block) {
-                this._tapStartX = pointer.x;
-                this._tapStartY = pointer.y;
-                this._tapBlock = block;
-            } else {
-                this._tapBlock = null;
-            }
-        });
-
+        // 블럭 탭 콜백 등록 (BoardManager가 호출)
+        this.boardManager.onBlockTap = (block) => this._handleBlockTap(block);
+        
         this.input.on('dragstart', (pointer, block) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
             if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
+            if (TurnManager.isEnemyTurnInProgress) return;
             block.dragStartX = block.x;
             block.dragStartY = block.y;
             this.children.bringToTop(block);
             block.setAlpha(0.8);
         });
-
+    
         this.input.on('drag', (pointer, block, dragX, dragY) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) return;
             if (this.tutorialDialogUI && this.tutorialDialogUI.isOpen) return;
             block.x = dragX;
             block.y = dragY;
         });
-
+    
         this.input.on('dragend', (pointer, block) => {
             if (this.combatManager.isBattleOver || this.stageManager.isTransitioning) {
                 block.setAlpha(1);
@@ -563,26 +652,63 @@ class DungeonScene extends Phaser.Scene {
                 block.y = block.dragStartY;
                 return;
             }
-
+        
             block.setAlpha(1);
-
-            // 이동 거리로 탭 vs 드래그 판별
-            const moved = Phaser.Math.Distance.Between(
-                this._tapStartX, this._tapStartY, pointer.x, pointer.y
-            );
-            if (moved < 8 && this._tapBlock === block) {
-                block.x = block.dragStartX;
-                block.y = block.dragStartY;
-                this._handleBlockTap(block);
-                return;
-            }
-
-            // 드래그로 처리
+        
+            // Phase 3-11-A: 탭 분기 제거. 탭은 BoardManager._attachTapListener가 처리.
+            // dragend는 항상 "드래그가 발생한 경우"만.
             if (block.location === 'board') {
                 this._handleBoardBlockDrop(pointer, block);
             }
-            // location === 'inventory'는 InventoryUI 내부에서 처리됨
         });
+    }
+
+    _handleBlockActivate(block) {
+        if (!TurnManager.canAct()) {
+            this._showActBlockedMessage();
+            return;
+        }
+
+        const cat = block.blockType.category;
+
+        if (cat === 'equip') {
+            this._showMessage('장비는 발동 효과가 없습니다');
+            return;
+        }
+        if (cat !== 'hero' && cat !== 'potion') return;
+
+        const result = this.combatManager.executeBlockEffect(block);
+        if (!result) return;
+
+        // 블럭 제거
+        const col = block.boardCol;
+        const row = block.boardRow;
+        this.boardManager.grid[row][col] = null;
+        block.destroy();
+
+        this._refreshHpBars();
+        TurnManager.spendAction('activate');
+
+        // 메시지
+        if (result.type === 'damage') {
+            this._showMessage(`${block.blockType.name} → 데미지 ${result.value}`);
+        } else if (result.type === 'heal' && result.value > 0) {
+            this._showMessage(`${block.blockType.name} → 회복 +${result.value}`);
+        }
+
+        if (result.victory) {
+            this._handleVictory();
+        }
+    }
+
+    _showActBlockedMessage() {
+        if (TurnManager.isEnemyTurnInProgress) {
+            this._showMessage('적 턴 진행 중...');
+        } else if (this.combatManager.isBattleOver) {
+            this._showMessage('전투 종료됨');
+        } else {
+            this._showMessage('행동 부족 — 턴 종료를 기다리세요');
+        }
     }
 
     /**
@@ -593,13 +719,19 @@ class DungeonScene extends Phaser.Scene {
     _handleBlockTap(block) {
         if (block.isSpawner) {
             this._handleSpawnerTap(block);
+            return;
         }
+        this._handleBlockActivate(block);
     }
-
     /**
      * 스페이서 탭 → 인접 빈칸에 블럭 1개 생성
      */
     _handleSpawnerTap(spawner) {
+        if (!TurnManager.canAct()) {
+            this._showActBlockedMessage();
+            return;
+        }
+
         const empty = this.boardManager.getAdjacentEmpty(spawner.boardCol, spawner.boardRow);
         if (!empty) {
             this._showMessage(`${spawner.blockType.name}: 빈 칸 부족`);
@@ -607,16 +739,14 @@ class DungeonScene extends Phaser.Scene {
         }
 
         const produces = spawner.blockType.produces;
-        let typeKey;
-        if (Array.isArray(produces)) {
-            typeKey = produces[Math.floor(Math.random() * produces.length)];
-        } else {
-            typeKey = produces;
-        }
+        const typeKey = Array.isArray(produces)
+            ? produces[Math.floor(Math.random() * produces.length)]
+            : produces;
 
         const newBlock = this.boardManager.spawnBlockOfType(typeKey, empty.col, empty.row, 1);
         if (newBlock) {
             console.log(`[Spawner] ${spawner.blockType.name} → ${newBlock.blockType.name} at (${empty.col},${empty.row})`);
+            TurnManager.spendAction('spawn');
         }
     }
 
@@ -657,6 +787,10 @@ class DungeonScene extends Phaser.Scene {
     }
 
     _handleBoardBlockDrop(pointer, block) {
+        if (TurnManager.isEnemyTurnInProgress) {
+            this.boardManager.snapToCell(block);
+            return;
+        }
         const bm = this.boardManager;
         const qm = this.queueManager;
 
@@ -686,11 +820,38 @@ class DungeonScene extends Phaser.Scene {
         }
 
         if (bm.canMerge(block.boardCol, block.boardRow, dropPos.col, dropPos.row)) {
+            if (!TurnManager.canAct()) {
+                this._showActBlockedMessage();
+                bm.snapToCell(block);
+                return;
+            }
             bm.mergeBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
+            TurnManager.spendAction('merge');
             return;
         }
 
         bm.swapBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
+    }
+
+    _handleVictory() {
+        const sm = this.stageManager;
+        const cleared = sm.getStageNumber();
+        
+        // Phase 3-11-A: 클리어 보상 지급 (자원 + 경험치 + 레벨업)
+        if (typeof RewardManager !== 'undefined' && RewardManager.grantStageClear) {
+            RewardManager.grantStageClear(cleared);
+        }
+
+        if (sm.hasNextStage()) {
+            this._showMessage(`스테이지 ${cleared} 클리어!`);
+            this.time.delayedCall(2000, () => this._goToNextStage());
+        } else {
+            this._showMessage('모든 스테이지 클리어!');
+            this.time.delayedCall(2000, () => {
+                this._showMessage('로비로 이동...');
+                this.time.delayedCall(1500, () => this._doReturnToLobby(true));
+            });
+        }
     }
 
     _isOverInventoryButton(screenX, screenY) {

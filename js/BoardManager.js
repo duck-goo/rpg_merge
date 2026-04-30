@@ -66,6 +66,8 @@ class BoardManager {
             block.boardRow = spec.row;
             block.location = 'board';
             this.grid[spec.row][spec.col] = block;
+
+            this._attachTapListener(block);   // ★ 추가
         }
 
         console.log(`[Board] 스페이서 ${initial.length}개 배치 완료`);
@@ -93,9 +95,9 @@ class BoardManager {
     }
 
     /**
-     * 지정 위치에 특정 타입의 블럭 생성 (스페이서 호출용)
-     * @returns {Block|null}
-     */
+    * 지정 위치에 특정 타입의 블럭 생성 (스페이서 호출용)
+    * @returns {Block|null}
+    */
     spawnBlockOfType(typeKey, col, row, grade = 1) {
         const blockType = this._findTypeByKey(typeKey);
         if (!blockType) {
@@ -118,7 +120,44 @@ class BoardManager {
         block.boardRow = row;
         block.location = 'board';
         this.grid[row][col] = block;
+
+        this._attachTapListener(block);   // ★ 추가
+
         return block;
+    }
+
+    /**
+     * Phase 3-11-A: 블럭에 탭(클릭) 리스너 부착
+     * - 드래그가 발생하지 않은 짧은 클릭만 탭으로 인식
+     * - DungeonScene이 onTap 콜백을 통해 처리
+     */
+    _attachTapListener(block) {
+        let pointerDownX = 0;
+        let pointerDownY = 0;
+        let isDragging = false;
+
+        block.on('pointerdown', (pointer) => {
+            pointerDownX = pointer.x;
+            pointerDownY = pointer.y;
+            isDragging = false;
+        });
+
+        block.on('dragstart', () => {
+            isDragging = true;
+        });
+
+        block.on('pointerup', (pointer) => {
+            if (isDragging) {
+                // 드래그였으면 dragend가 처리. 탭 콜백 X
+                return;
+            }
+            const moved = Phaser.Math.Distance.Between(
+                pointerDownX, pointerDownY, pointer.x, pointer.y
+            );
+            if (moved < 8 && this.onBlockTap) {
+                this.onBlockTap(block);
+            }
+        });
     }
 
     /**
@@ -174,8 +213,14 @@ class BoardManager {
      * 랜덤 블럭 타입 반환
      */
     _getRandomBlockType() {
-        const index = Math.floor(Math.random() * this.blockTypes.length);
-        return this.blockTypes[index];
+        // Phase 3-11-A: 스페이서는 랜덤 생성 대상에서 제외
+        const eligible = this.blockTypes.filter(t => !t.isSpawner);
+        if (eligible.length === 0) {
+            console.warn('[Board] 일반 블럭 타입이 없습니다');
+            return null;
+        }
+        const index = Math.floor(Math.random() * eligible.length);
+        return eligible[index];
     }
 
     /**
@@ -183,19 +228,23 @@ class BoardManager {
      */
     createBlockAt(col, row) {
         const blockType = this._getRandomBlockType();
+        if (!blockType) return null;
         const grade = CONFIG.BLOCK.INIT_GRADE;
         const { x, y } = this.boardToScreen(col, row);
-
+        
         const block = new Block(
             this.scene, x, y,
             this.boardInfo.cellSize,
             blockType, grade
         );
-
+    
         block.boardCol = col;
         block.boardRow = row;
-
+    
         this.grid[row][col] = block;
+        
+        this._attachTapListener(block);   // ★ 추가
+        
         return block;
     }
 
@@ -396,6 +445,9 @@ class BoardManager {
      * 전체 보드 리필: 낙하 → 빈칸에 새 블럭 생성
      */
     refillBoard() {
+        // Phase 3-11-A: 자동 리필 비활성화됨. 호출 자체를 추적용으로 남김.
+        console.warn('[Board] refillBoard() 호출됨 — Phase 3-11-A에서는 자동 리필 OFF. 무시합니다.');
+        return;
         const { cols } = this.boardInfo;
 
         for (let col = 0; col < cols; col++) {

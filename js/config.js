@@ -133,6 +133,11 @@ const CONFIG = {
         { stage: 5, enemy: { name: '다크 나이트', hp: 300, attack: 15 } },
     ],
 
+    // Phase 3-11-A: 던전 룰
+    DUNGEON: {
+        BASE_ACTIONS_PER_TURN: 3,
+    },
+
     // ─── Phase 3-3: 로비 마을 ─────────────────
     
     // 로비 건물 목록 (지침서 3.4 기준 18종)
