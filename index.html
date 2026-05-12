@@ -5,36 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Merge RPG</title>
     <style>
-        /* 모바일 전체 화면, 스크롤 방지 */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
+            width: 100%; height: 100%; overflow: hidden;
             background-color: #1a1a2e;
-            /* 터치 시 하이라이트 제거 */
             -webkit-tap-highlight-color: transparent;
-            /* 텍스트 선택 방지 */
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: none; user-select: none;
         }
         #game-container {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
         }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
 
-    <!-- Phaser 3.80.1 (안정 버전 고정) -->
+    <!-- Phaser 3.80.1 -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
     <script src="js/config.js"></script>
     
@@ -57,6 +44,9 @@
 
     <!-- Phase 3-10: 창고 + 분해 -->
     <script src="js/StorageManager.js"></script>
+
+    <!-- Phase 3-11-B: 진화 시스템 -->
+    <script src="js/EvolutionManager.js"></script>
     
     <!-- 게임 오브젝트 -->
     <script src="js/Block.js"></script>
@@ -88,6 +78,9 @@
     <!-- Phase 3-10: 확인 다이얼로그 + 보상 팝업 -->
     <script src="js/ui/ConfirmDialog.js"></script>
     <script src="js/ui/RewardItemsDialog.js"></script>
+
+    <!-- Phase 3-11-B: 분기 선택 팝업 -->
+    <script src="js/ui/BranchSelectDialog.js"></script>
     
     <!-- Phase 3-3: 로비 탭 컴포넌트 -->
     <script src="js/LobbyVillage.js"></script>
@@ -103,5 +96,7 @@
     <script src="js/LobbyScene.js"></script>
     
     <script src="js/main.js"></script>
+    <!-- 치트 (출시 전 제거) -->
+    <script src="js/cheats.js"></script>
 </body>
 </html>

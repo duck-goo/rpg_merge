@@ -70,6 +70,8 @@ class DungeonScene extends Phaser.Scene {
         const stageData = this.stageManager.getCurrentStage();
         this.combatManager = new CombatManager(this, stageData.enemy);
 
+        this.branchDialog = new BranchSelectDialog(this);
+
         this._createEnemyUI(width, height);
         this._createPlayerUI(width, height);
         this._createButtons(width, height);
@@ -691,7 +693,10 @@ class DungeonScene extends Phaser.Scene {
 
         // 메시지
         if (result.type === 'damage') {
-            this._showMessage(`${block.blockType.name} → 데미지 ${result.value}`);
+            let msg = `${block.blockType.name} → 데미지 ${result.value}`;
+            if (result.heal > 0) msg += `, 회복 +${result.heal}`;
+            if (result.shieldAmount > 0) msg += `, 실드 ${result.shieldAmount}`;
+            this._showMessage(msg);
         } else if (result.type === 'heal' && result.value > 0) {
             this._showMessage(`${block.blockType.name} → 회복 +${result.value}`);
         }
@@ -788,6 +793,54 @@ class DungeonScene extends Phaser.Scene {
                 bm.snapToCell(block);
                 return;
             }
+        
+            // Phase 3-11-B: 진화 케이스 분기
+            const blockA = bm.grid[block.boardRow][block.boardCol];
+            const blockB = bm.grid[dropPos.row][dropPos.col];
+        
+            // 영웅+장비 진화
+            const heroEvo = EvolutionManager.canHeroEvolve(blockA, blockB);
+            if (heroEvo) {
+                bm.executeEvolution(block.boardCol, block.boardRow, dropPos.col, dropPos.row, heroEvo.result);
+                TurnManager.spendAction('evolve');
+                const resultType = EvolutionManager.findBlockType(heroEvo.result);
+                if (resultType) this._showMessage(`${resultType.name}으로 진화!`);
+                return;
+            }
+        
+            // 장비+장비 진화
+            const equipEvo = EvolutionManager.canEquipEvolve(blockA, blockB);
+            if (equipEvo) {
+                if (equipEvo.result) {
+                    // 단일 진화
+                    bm.executeEvolution(block.boardCol, block.boardRow, dropPos.col, dropPos.row, equipEvo.result);
+                    TurnManager.spendAction('evolve');
+                    const resultType = EvolutionManager.findBlockType(equipEvo.result);
+                    if (resultType) this._showMessage(`${resultType.name}으로 진화!`);
+                } else if (equipEvo.branches) {
+                    // 분기 팝업 — 행동은 선택 시점에 차감
+                    const fromCol = block.boardCol;
+                    const fromRow = block.boardRow;
+                    const toCol = dropPos.col;
+                    const toRow = dropPos.row;
+                    this.branchDialog.open(
+                        equipEvo.branches,
+                        (selectedKey) => {
+                            bm.executeEvolution(fromCol, fromRow, toCol, toRow, selectedKey);
+                            TurnManager.spendAction('evolve');
+                            const resultType = EvolutionManager.findBlockType(selectedKey);
+                            if (resultType) this._showMessage(`${resultType.name}으로 진화!`);
+                        },
+                        () => {
+                            // 취소: 원위치 복귀
+                            bm.snapToCell(block);
+                        }
+                    );
+                }
+                return;
+            }
+        
+            // 일반 머지
             bm.mergeBlocks(block.boardCol, block.boardRow, dropPos.col, dropPos.row);
             TurnManager.spendAction('merge');
             return;

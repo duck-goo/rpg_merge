@@ -350,23 +350,23 @@ class BoardManager {
     canMerge(col1, row1, col2, row2) {
         const blockA = this.grid[row1][col1];
         const blockB = this.grid[row2][col2];
-
-        if (!blockA || !blockB) {
-            return false;
+        if (!blockA || !blockB) return false;
+        
+        // 스페이서는 머지 불가
+        if (blockA.isSpawner || blockB.isSpawner) return false;
+        
+        // Phase 3-11-B: 진화 케이스 우선 체크
+        if (typeof EvolutionManager !== 'undefined') {
+            // 영웅 + 장비 = 진화
+            if (EvolutionManager.canHeroEvolve(blockA, blockB)) return true;
+            // 장비 ×2 = 진화 (Lv.3끼리)
+            if (EvolutionManager.canEquipEvolve(blockA, blockB)) return true;
         }
 
-        if (blockA.blockType.key !== blockB.blockType.key) {
-            return false;
-        }
-
-        if (blockA.grade !== blockB.grade) {
-            return false;
-        }
-
-        if (blockA.grade >= CONFIG.BLOCK.MAX_GRADE) {
-            return false;
-        }
-
+        // 일반 머지: 같은 종류 + 같은 등급 + MAX 미만
+        if (blockA.blockType.key !== blockB.blockType.key) return false;
+        if (blockA.grade !== blockB.grade) return false;
+        if (blockA.grade >= CONFIG.BLOCK.MAX_GRADE) return false;
         return true;
     }
 
@@ -391,6 +391,54 @@ class BoardManager {
         );
 
         return toBlock;
+    }
+
+    /**
+     * Phase 3-11-B: 진화 머지 실행
+     * - 영웅 진화: 영웅 위치에 결과 영웅 Lv.1, 장비 소멸
+     * - 장비 진화: 한쪽 위치에 결과 장비 Lv.1, 다른쪽 소멸
+     *
+     * @param {number} fromCol - 드래그 시작 블럭
+     * @param {number} fromRow
+     * @param {number} toCol - 드롭 대상 블럭
+     * @param {number} toRow
+     * @param {string} resultKey - 진화 결과 블럭 key
+     * @returns {Block|null} 새로 생성된 블럭
+     */
+    executeEvolution(fromCol, fromRow, toCol, toRow, resultKey) {
+        const fromBlock = this.grid[fromRow][fromCol];
+        const toBlock = this.grid[toRow][toCol];
+        if (!fromBlock || !toBlock) return null;
+
+        // 영웅 진화 케이스: 영웅 위치에 결과 배치
+        let placeCol, placeRow;
+        if (fromBlock.blockType.category === 'hero') {
+            placeCol = fromCol;
+            placeRow = fromRow;
+        } else if (toBlock.blockType.category === 'hero') {
+            placeCol = toCol;
+            placeRow = toRow;
+        } else {
+            // 장비 진화: 드롭 위치(toBlock 자리)에 결과 배치
+            placeCol = toCol;
+            placeRow = toRow;
+        }
+
+        // 양쪽 블럭 제거
+        fromBlock.destroy();
+        toBlock.destroy();
+        this.grid[fromRow][fromCol] = null;
+        this.grid[toRow][toCol] = null;
+
+        // 결과 블럭 생성 (Lv.1)
+        const newBlock = this.spawnBlockOfType(resultKey, placeCol, placeRow, 1);
+
+        if (newBlock) {
+            const fromName = fromBlock.blockType.name + ' Lv.' + fromBlock.grade;
+            const toName = toBlock.blockType.name + ' Lv.' + toBlock.grade;
+            console.log(`[Evolve] ${fromName} + ${toName} → ${newBlock.blockType.name} Lv.1`);
+        }
+        return newBlock;
     }
 
     /**
@@ -447,18 +495,6 @@ class BoardManager {
     refillBoard() {
         // Phase 3-11-A: 자동 리필 비활성화됨. 호출 자체를 추적용으로 남김.
         console.warn('[Board] refillBoard() 호출됨 — Phase 3-11-A에서는 자동 리필 OFF. 무시합니다.');
-        return;
-        const { cols } = this.boardInfo;
-
-        for (let col = 0; col < cols; col++) {
-            // 블럭 낙하
-            const emptyCount = this.dropColumn(col);
-
-            // 최상단 빈칸에 새 블럭 생성
-            for (let row = 0; row < emptyCount; row++) {
-                this.createBlockAt(col, row);
-            }
-        }
     }
 
     /**
@@ -477,19 +513,5 @@ class BoardManager {
         }
         // Phase 3-11-A: 자동 채우기 X, 스페이서만 재배치
         this.spawnInitialSpawners();
-    }
-
-    canMerge(col1, row1, col2, row2) {
-        const blockA = this.grid[row1][col1];
-        const blockB = this.grid[row2][col2];
-        if (!blockA || !blockB) return false;
-        
-        // Phase 3-11-A: 스페이서는 머지 불가
-        if (blockA.isSpawner || blockB.isSpawner) return false;
-        
-        if (blockA.blockType.key !== blockB.blockType.key) return false;
-        if (blockA.grade !== blockB.grade) return false;
-        if (blockA.grade >= CONFIG.BLOCK.MAX_GRADE) return false;
-        return true;
     }
 }
