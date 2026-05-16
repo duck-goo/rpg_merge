@@ -338,11 +338,18 @@ class DungeonScene extends Phaser.Scene {
             color: '#888888',
         }).setOrigin(0.5, 0);
 
-        this.enemyNameText = this.add.text(gameWidth / 2, centerY - 20, '', {
+        this.enemyNameText = this.add.text(gameWidth / 2, centerY - 24, '', {
             fontFamily: 'Arial, sans-serif',
-            fontSize: '16px',
+            fontSize: '15px',
             color: '#cccccc',
             fontStyle: 'bold',
+        }).setOrigin(0.5);
+
+        // 적 타입 라벨 (이름 아래)
+        this.enemyTypeText = this.add.text(gameWidth / 2, centerY - 8, '', {
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '11px',
+            color: '#f1c40f',
         }).setOrigin(0.5);
 
         const barWidth = 200;
@@ -542,17 +549,35 @@ class DungeonScene extends Phaser.Scene {
         const cm = this.combatManager;
         const sm = this.stageManager;
         const ei = this._enemyBarInfo;
-
+        
         this.stageText.setText(`Stage ${sm.getStageNumber()}`);
         this.enemyNameText.setText(cm.enemyName);
-
-        const ratio = Math.max(0, cm.enemyHp / cm.enemyMaxHp);
+        
+        if (this.enemyTypeText) {
+            const typeLabel = cm.enemy.getTypeLabel();
+            this.enemyTypeText.setText(typeLabel || '');
+        }
+    
+        const ratio = Math.max(0, cm.enemy.hp / cm.enemy.maxHp);
         this.enemyHpBar.clear();
         this.enemyHpBar.fillStyle(0xe74c3c, 1);
         if (ratio > 0) {
             this.enemyHpBar.fillRoundedRect(ei.x, ei.y, ei.w * ratio, ei.h, 4);
         }
-        this.enemyHpText.setText(`${cm.enemyHp} / ${cm.enemyMaxHp}`);
+        
+        // 방어막 표시 (HP 위에 파란 바)
+        if (cm.enemy.type === 'barrier' && cm.enemy.barrierHp > 0) {
+            const barrierRatio = cm.enemy.barrierHp / (cm.enemy.params.barrierAmount || 50);
+            this.enemyHpBar.fillStyle(0x3498db, 0.8);
+            this.enemyHpBar.fillRoundedRect(ei.x, ei.y - 6, ei.w * barrierRatio, 4, 2);
+        }
+    
+        // HP 텍스트 (방어막 포함)
+        let hpText = `${cm.enemy.hp} / ${cm.enemy.maxHp}`;
+        if (cm.enemy.type === 'barrier' && cm.enemy.barrierHp > 0) {
+            hpText += `  🔵${cm.enemy.barrierHp}`;
+        }
+        this.enemyHpText.setText(hpText);
     }
 
     _refreshPlayerUI() {

@@ -937,11 +937,11 @@ const CONFIG = {
 
     // 스테이지 데이터
     STAGES: [
-        { stage: 1, enemy: { name: '슬라임',     hp: 80,  attack: 4  } },
-        { stage: 2, enemy: { name: '고블린',     hp: 120, attack: 6  } },
-        { stage: 3, enemy: { name: '스켈레톤',   hp: 160, attack: 8  } },
-        { stage: 4, enemy: { name: '오크 전사',  hp: 220, attack: 11 } },
-        { stage: 5, enemy: { name: '다크 나이트', hp: 300, attack: 15 } },
+        { stage: 1, enemy: { name: '슬라임', hp: 80, attack: 4, type: 'normal' } },
+        { stage: 2, enemy: { name: '고블린', hp: 120, attack: 6, type: 'evader', params: { evadeRate: 0.3 } } },
+        { stage: 3, enemy: { name: '재생 슬라임', hp: 140, attack: 7, type: 'regen', params: { regenAmount: 15 } } },
+        { stage: 4, enemy: { name: '오크 전사', hp: 200, attack: 11, type: 'defender', params: { damageReduction: 0.3 } } },
+        { stage: 5, enemy: { name: '다크 나이트', hp: 250, attack: 15, type: 'barrier', params: { barrierAmount: 80 } } },
     ],
 
     // Phase 3-11-A: 던전 룰

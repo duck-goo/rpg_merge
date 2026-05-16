@@ -21,11 +21,15 @@ class CombatManager {
         // Phase 3-11-B-3: 실드 (HP 위 추가 흡수, 덮어쓰기)
         this.playerShield = 0;
 
-        // 적군 상태
-        this.enemyHp = enemyData.hp;
-        this.enemyMaxHp = enemyData.hp;
-        this.enemyAttack = enemyData.attack;
-        this.enemyName = enemyData.name;
+        // Phase 3-11-C-1: Enemy 인스턴스
+        this.enemy = new Enemy(enemyData);
+
+        // 호환성 게터 (기존 코드에서 직접 참조하는 부분용)
+        Object.defineProperty(this, 'enemyHp',     { get: () => this.enemy.hp, set: v => this.enemy.hp = v });
+        Object.defineProperty(this, 'enemyMaxHp',  { get: () => this.enemy.maxHp });
+        Object.defineProperty(this, 'enemyAttack', { get: () => this.enemy.attack });
+        Object.defineProperty(this, 'enemyName',   { get: () => this.enemy.name });
+
         this.isBattleOver = false;
     }
 
@@ -124,7 +128,7 @@ class CombatManager {
             console.log(`[Combat] ${block.blockType.name} Lv.${block.grade} → [${r.breakdown.join(' / ')}]`);
             console.log(`  적HP ${this.enemyHp}/${this.enemyMaxHp}, 내HP ${this.playerHp}/${this.playerMaxHp}${this.playerShield ? `, 실드 ${this.playerShield}` : ''}`);
 
-            if (this.enemyHp <= 0) {
+            if (!this.enemy.isAlive) {
                 this.isBattleOver = true;
                 result.victory = true;
             }
@@ -153,45 +157,64 @@ class CombatManager {
     applyHeroEffects(block) {
         const effectDef = CONFIG.HERO_EFFECTS[block.blockType.key];
         if (!effectDef) {
-            // 정의 없으면 기본 데미지로 처리
             const dmg = block.grade * CONFIG.COMBAT.HERO_DMG_MULT;
-            return { totalDamage: dmg, totalHeal: 0, breakdown: [`기본 ×1.0`] };
+            const r = this.enemy.takeDamage(dmg);
+            return { totalDamage: r.dealt, totalHeal: 0, breakdown: [`기본 ×1.0 → ${r.dealt}`] };
         }
-
+    
         const grade = block.grade;
         const baseUnit = effectDef.baseUnit;
         const pm = (typeof PassiveManager !== 'undefined') ? PassiveManager : null;
         const heroMult = pm ? pm.getHeroDamageMult() : 1.0;
-
+    
         let totalDamage = 0;
         let totalHeal = 0;
         let shieldAmount = 0;
         const summons = [];
         const breakdown = [];
-
+    
         for (const eff of effectDef.effects) {
             switch (eff.type) {
                 case 'damage_single':
                 case 'damage_aoe': {
-                    const dmg = Math.floor(grade * baseUnit * eff.mult * heroMult);
-                    totalDamage += dmg;
-                    breakdown.push(`${eff.type === 'damage_aoe' ? '광역' : '단일'} ${dmg}`);
+                    const rawDmg = Math.floor(grade * baseUnit * eff.mult * heroMult);
+                    const r = this.enemy.takeDamage(rawDmg);
+                    totalDamage += r.dealt;
+                    if (r.missed) {
+                        breakdown.push(`회피`);
+                    } else if (r.blocked > 0) {
+                        breakdown.push(`${eff.type === 'damage_aoe' ? '광역' : '단일'} ${r.dealt}(차단 ${r.blocked})`);
+                    } else {
+                        breakdown.push(`${eff.type === 'damage_aoe' ? '광역' : '단일'} ${r.dealt}`);
+                    }
                     break;
                 }
                 case 'damage_multi_hit': {
                     const perHit = Math.floor(grade * baseUnit * eff.mult * heroMult);
-                    totalDamage += perHit * eff.hits;
-                    breakdown.push(`연타 ${perHit}×${eff.hits}=${perHit * eff.hits}`);
+                    let hitTotal = 0;
+                    let missedCount = 0;
+                    let blockedSum = 0;
+                    for (let i = 0; i < eff.hits; i++) {
+                        const r = this.enemy.takeDamage(perHit);
+                        if (r.missed) missedCount++;
+                        hitTotal += r.dealt;
+                        blockedSum += r.blocked;
+                    }
+                    totalDamage += hitTotal;
+                    let note = `연타 ${eff.hits}회 → ${hitTotal}`;
+                    if (missedCount > 0) note += ` (회피 ${missedCount}회)`;
+                    if (blockedSum > 0) note += ` (차단 ${blockedSum})`;
+                    breakdown.push(note);
                     break;
                 }
                 case 'crit': {
                     const roll = Math.random();
                     if (roll < eff.chance) {
-                        // 직전 단일 데미지에 critMult 적용
                         const baseDmg = Math.floor(grade * baseUnit * 1.0 * heroMult);
                         const extra = Math.floor(baseDmg * (eff.critMult - 1));
-                        totalDamage += extra;
-                        breakdown.push(`💥치명타+${extra}`);
+                        const r = this.enemy.takeDamage(extra);
+                        totalDamage += r.dealt;
+                        breakdown.push(`💥치명+${r.dealt}`);
                     }
                     break;
                 }
@@ -208,26 +231,23 @@ class CombatManager {
                     break;
                 }
                 case 'dot': {
-                    // Phase 3-11-C에서 적에 dot 부여 시스템 추가. 지금은 즉발 데미지로 환산.
+                    // 즉발 환산 (Phase 3-11-C-3에서 진짜 도트 시스템)
                     const dmg = Math.floor(grade * baseUnit * eff.mult * eff.turns * heroMult);
-                    totalDamage += dmg;
-                    breakdown.push(`도트 ${dmg} (${eff.turns}턴치 즉발)`);
+                    const dealt = this.enemy.takeDot(dmg);
+                    totalDamage += dealt;
+                    breakdown.push(`도트 ${dealt}`);
                     break;
                 }
                 case 'debuff':
-                    // Phase 3-11-C: 적 디버프 시스템. 지금은 무시.
                     breakdown.push(`디버프(미구현)`);
                     break;
                 case 'summon':
-                    // Phase 3-11.5: 보드에 블럭 소환. 지금은 정보만 기록.
                     summons.push({ blockKey: eff.blockKey, count: eff.count || 1 });
                     breakdown.push(`소환 ${eff.blockKey}×${eff.count || 1}`);
                     break;
-                default:
-                    console.warn('[Combat] 알 수 없는 효과 타입:', eff.type);
             }
         }
-
+    
         return { totalDamage, totalHeal, shieldAmount, summons, breakdown };
     }
     /**
@@ -235,9 +255,11 @@ class CombatManager {
      */
     runEnemyTurn() {
         if (this.isBattleOver) return;
-        let dmg = this.enemyAttack;
         
-        // Phase 3-11-B-3: 실드가 먼저 흡수
+        // Phase 3-11-C-1: 적 턴 시작 시 자체 효과 (재생 등)
+        this.enemy.onTurnStart();
+        
+        let dmg = this.enemy.getAttackDamage();
         let absorbed = 0;
         if (this.playerShield > 0) {
             absorbed = Math.min(this.playerShield, dmg);
@@ -250,7 +272,7 @@ class CombatManager {
         }
         
         if (absorbed > 0) {
-            console.log(`[Combat] 적 반격: ${this.enemyAttack} → 실드 흡수 ${absorbed}, HP 데미지 ${dmg} (실드 잔여 ${this.playerShield})`);
+            console.log(`[Combat] 적 반격: ${this.enemy.getAttackDamage()} → 실드 흡수 ${absorbed}, HP -${dmg}`);
         } else {
             console.log(`[Combat] 적 반격: ${dmg} (내HP ${this.playerHp}/${this.playerMaxHp})`);
         }

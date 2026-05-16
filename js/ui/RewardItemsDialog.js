@@ -19,7 +19,6 @@ class RewardItemsDialog {
 
         const groups = StorageManager.getPendingGrouped();
         if (groups.length === 0) {
-            // 아무것도 없으면 안 띄움
             if (opts.onConfirm) opts.onConfirm();
             return;
         }
@@ -29,14 +28,18 @@ class RewardItemsDialog {
         const { width: gw, height: gh } = this.scene.scale;
         const depthBase = 420;
 
-        // 리스트 개수에 따라 팝업 높이 가변
-        const headerH = 100;
+        // 팝업 크기는 "화면에 맞춘 최대" 고정. 리스트가 넘치면 스크롤로 해결
         const itemH = 44;
+        const headerH = 100;
         const footerH = 70;
-        const maxVisibleItems = 6;   // 이보다 많으면 간단 요약만 (스크롤은 Phase 4)
-        const visibleCount = Math.min(groups.length, maxVisibleItems);
-        const dh = headerH + visibleCount * itemH + footerH;
+
+        // 리스트 영역 최대 높이: 화면 높이의 45% 정도
+        const maxListH = Math.floor(gh * 0.45);
+        const desiredListH = groups.length * itemH;
+        const listH = Math.min(desiredListH, maxListH);
+
         const dw = 300;
+        const dh = headerH + listH + footerH;
         const dx = (gw - dw) / 2;
         const dy = (gh - dh) / 2;
 
@@ -58,7 +61,7 @@ class RewardItemsDialog {
         // 박스
         const box = this.scene.add.graphics();
         box.fillStyle(0x1a2540, 1);
-        box.lineStyle(2, 0xf1c40f, 1);   // 금색 테두리 (수집 이벤트)
+        box.lineStyle(2, 0xf1c40f, 1);
         box.fillRoundedRect(dx, dy, dw, dh, 12);
         box.strokeRoundedRect(dx, dy, dw, dh, 12);
         box.setDepth(depthBase + 1);
@@ -77,9 +80,12 @@ class RewardItemsDialog {
         this.uiObjects.push(titleText);
 
         // 서브
+        const subTextMsg = desiredListH > maxListH
+            ? '위/아래로 드래그해 전체 확인'
+            : '다음 블럭을 창고에 보관합니다';
         const subText = this.scene.add.text(
             dx + dw / 2, dy + 50,
-            '다음 블럭을 창고에 보관합니다', {
+            subTextMsg, {
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '11px',
                 color: '#aaaaaa',
@@ -87,25 +93,15 @@ class RewardItemsDialog {
         ).setOrigin(0.5, 0).setDepth(depthBase + 2);
         this.uiObjects.push(subText);
 
-        // 리스트
-        const listStartY = dy + headerH;
-        for (let i = 0; i < visibleCount; i++) {
-            const g = groups[i];
-            this._renderItemRow(dx, listStartY + i * itemH, dw, g, depthBase + 2);
-        }
-
-        // 초과분 요약 표시
-        if (groups.length > maxVisibleItems) {
-            const moreText = this.scene.add.text(
-                dx + dw / 2, listStartY + visibleCount * itemH - 4,
-                `… 외 ${groups.length - maxVisibleItems}종`, {
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '10px',
-                    color: '#888888',
-                }
-            ).setOrigin(0.5, 0).setDepth(depthBase + 2);
-            this.uiObjects.push(moreText);
-        }
+        // ─── 스크롤 가능한 리스트 영역 ───
+        const listAreaX = dx;
+        const listAreaY = dy + headerH;
+        const listAreaW = dw;
+        this._renderScrollableList(
+            groups,
+            listAreaX, listAreaY, listAreaW, listH,
+            itemH, depthBase + 2
+        );
 
         // 확인 버튼
         const btnW = 160;
@@ -139,20 +135,126 @@ class RewardItemsDialog {
         });
         this.uiObjects.push(zone);
     }
+    
+    /**
+     * 스크롤 가능한 리스트 영역 렌더링
+     * - 마스크로 리스트 영역 밖을 가림
+     * - 드래그로 세로 스크롤 (콘텐츠가 영역보다 클 때만)
+     */
+    _renderScrollableList(groups, areaX, areaY, areaW, areaH, itemH, depth) {
+        // 리스트 컨테이너 (스크롤 대상)
+        const listContainer = this.scene.add.container(areaX, areaY);
+        listContainer.setDepth(depth);
+        this.uiObjects.push(listContainer);
 
-    _renderItemRow(dx, y, dw, group, depth) {
-        // 블럭 미니 타일
+        // 마스크 그래픽
+        const maskShape = this.scene.make.graphics({ x: 0, y: 0, add: false });
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(areaX, areaY, areaW, areaH);
+        const mask = maskShape.createGeometryMask();
+        listContainer.setMask(mask);
+
+        // destroy 시 정리될 수 있도록 uiObjects에 shape도 넣음
+        this.uiObjects.push(maskShape);
+
+        // 아이템들 (컨테이너 로컬 좌표 = 0,0 기준으로 배치)
+        for (let i = 0; i < groups.length; i++) {
+            const g = groups[i];
+            const rowObjects = this._renderItemRowInContainer(g, 0, i * itemH, areaW, depth);
+            for (const obj of rowObjects) {
+                listContainer.add(obj);
+            }
+        }
+
+        // 스크롤 설정
+        const contentH = groups.length * itemH;
+        const canScroll = contentH > areaH;
+        const minY = areaY - (contentH - areaH);   // 끝까지 올렸을 때
+        const maxY = areaY;                         // 최초 위치
+
+        // 드래그 히트존 (리스트 영역)
+        const hitZone = this.scene.add.zone(
+            areaX + areaW / 2, areaY + areaH / 2,
+            areaW, areaH
+        );
+        hitZone.setInteractive();
+        hitZone.setDepth(depth);
+        this.uiObjects.push(hitZone);
+
+        // 드래그 상태
+        let isDragging = false;
+        let pointerDownY = 0;
+        let containerStartY = 0;
+
+        hitZone.on('pointerdown', (pointer) => {
+            isDragging = false;
+            pointerDownY = pointer.y;
+            containerStartY = listContainer.y;
+        });
+
+        hitZone.on('pointermove', (pointer) => {
+            if (!pointer.isDown) return;
+            if (!canScroll) return;
+
+            const dy = pointer.y - pointerDownY;
+            if (!isDragging && Math.abs(dy) > 4) {
+                isDragging = true;
+            }
+
+            if (isDragging) {
+                let newY = containerStartY + dy;
+                newY = Math.max(minY, Math.min(maxY, newY));
+                listContainer.y = newY;
+            }
+        });
+
+        hitZone.on('pointerup', () => { isDragging = false; });
+        hitZone.on('pointerupoutside', () => { isDragging = false; });
+
+        // 스크롤 힌트 (콘텐츠 많을 때 상하단 표시)
+        if (canScroll) {
+            const hintTop = this.scene.add.text(
+                areaX + areaW - 10, areaY + 4,
+                '▲', {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '10px',
+                    color: '#666666',
+                }
+            ).setOrigin(1, 0).setDepth(depth + 1);
+            this.uiObjects.push(hintTop);
+
+            const hintBottom = this.scene.add.text(
+                areaX + areaW - 10, areaY + areaH - 4,
+                '▼', {
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '10px',
+                    color: '#666666',
+                }
+            ).setOrigin(1, 1).setDepth(depth + 1);
+            this.uiObjects.push(hintBottom);
+        }
+    }
+
+    /**
+     * 한 행을 컨테이너용 로컬 좌표로 생성
+     */
+    _renderItemRowInContainer(group, localX, localY, areaW, depth) {
         const tileSize = 32;
-        const tileX = dx + 24;
+        const tileX = localX + 24;
+        const tileY = localY + 4;
 
+        const objects = [];
+
+        // 블럭 미니 타일
         const tileBg = this.scene.add.graphics();
         tileBg.fillStyle(group.blockType.color, 1);
-        tileBg.fillRoundedRect(tileX, y, tileSize, tileSize, 4);
+        tileBg.fillRoundedRect(tileX, tileY, tileSize, tileSize, 4);
         tileBg.setDepth(depth);
-        this.uiObjects.push(tileBg);
+        objects.push(tileBg);
 
+        // 등급
         const gradeText = this.scene.add.text(
-            tileX + tileSize / 2, y + tileSize / 2,
+            tileX + tileSize / 2, tileY + tileSize / 2,
             String(group.grade), {
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '14px',
@@ -160,11 +262,11 @@ class RewardItemsDialog {
                 fontStyle: 'bold',
             }
         ).setOrigin(0.5).setDepth(depth + 1);
-        this.uiObjects.push(gradeText);
+        objects.push(gradeText);
 
-        // 이름 + 등급
+        // 이름
         const nameText = this.scene.add.text(
-            tileX + tileSize + 14, y + 4,
+            tileX + tileSize + 14, tileY + 4,
             `${group.blockType.name} Lv.${group.grade}`, {
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '13px',
@@ -172,11 +274,11 @@ class RewardItemsDialog {
                 fontStyle: 'bold',
             }
         ).setDepth(depth);
-        this.uiObjects.push(nameText);
+        objects.push(nameText);
 
-        // 개수 (우측)
+        // 개수
         const countText = this.scene.add.text(
-            dx + dw - 24, y + tileSize / 2,
+            localX + areaW - 24, tileY + tileSize / 2,
             `×${group.count}`, {
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '16px',
@@ -184,7 +286,9 @@ class RewardItemsDialog {
                 fontStyle: 'bold',
             }
         ).setOrigin(1, 0.5).setDepth(depth);
-        this.uiObjects.push(countText);
+        objects.push(countText);
+
+        return objects;
     }
 
     _onConfirm(opts) {
